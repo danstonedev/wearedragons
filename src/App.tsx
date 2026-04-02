@@ -41,6 +41,10 @@ import type {
 } from "./game/missions";
 import "./App.css";
 import TouchControls from "./controls/TouchControls";
+import DPadControls from "./controls/DPadControls";
+import SettingsPanel from "./SettingsPanel";
+import { settings } from "./controls/ControlSettings";
+import { preset, isTouchDevice, device } from "./utils/device";
 
 const DRAGON_MODEL = `${import.meta.env.BASE_URL}dragon.glb`;
 
@@ -291,7 +295,8 @@ function BlockyDragon({ dragon }: { dragon: DragonType }) {
     if (keys["shift"]) dy -= 1;
 
     if (Math.abs(dx) > 0.01) {
-      visualGroupRef.current.rotation.y -= dx * 2.5 * s.agility * delta;
+      visualGroupRef.current.rotation.y -=
+        dx * 2.5 * s.agility * settings.turnSensitivity * delta;
     }
 
     let targetBank = (-dx * Math.PI) / 6;
@@ -321,12 +326,12 @@ function BlockyDragon({ dragon }: { dragon: DragonType }) {
     const altitudeAboveGround = pos.y - groundY;
     const grounded = altitudeAboveGround < minAltitude + 0.2;
 
-    const moveSpeed = dz * maxSpeed;
+    const moveSpeed = dz * maxSpeed * settings.speedSensitivity;
     const tvx = Math.sin(visualGroupRef.current.rotation.y) * moveSpeed;
     const tvz = Math.cos(visualGroupRef.current.rotation.y) * moveSpeed;
 
     // Altitude: hold when no input, climb/descend with input
-    let fvy = dy * (maxSpeed * 0.75);
+    let fvy = dy * (maxSpeed * 0.75) * settings.climbSensitivity;
     // Clamp: don't go below terrain
     if (altitudeAboveGround < minAltitude && fvy <= 0) {
       fvy = Math.max(fvy, (minAltitude - altitudeAboveGround) * 10);
@@ -410,7 +415,7 @@ function BlockyDragon({ dragon }: { dragon: DragonType }) {
       // Flying: reset to neutral
       scene.position.y = THREE.MathUtils.lerp(scene.position.y, 0, 6 * delta);
       // Pitch up when climbing, down when diving — proportional to input
-      const pitchTarget = -dy * 0.35;
+      const pitchTarget = -dy * 0.35 * settings.climbSensitivity;
       scene.rotation.x = THREE.MathUtils.lerp(
         scene.rotation.x,
         pitchTarget,
@@ -1403,6 +1408,8 @@ function GameWorld({
   onMissionUpdate: (s: MissionRuntimeState) => void;
 }) {
   const [damageFlash, setDamageFlash] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [controlScheme, setControlScheme] = useState(settings.scheme);
   const beaconActive =
     missionState.completedObjectiveIds.includes("destroy_towers");
   const missionType = mission.type;
@@ -1550,7 +1557,7 @@ function GameWorld({
       <Canvas
         shadows={{ type: THREE.PCFShadowMap }}
         camera={{ position: [0, 5, 10], fov: 60 }}
-        dpr={[1, 1.5]}
+        dpr={[1, preset.maxDpr]}
       >
         <Sky sunPosition={[100, 20, 100]} />
         <Environment preset="sunset" />
@@ -1559,7 +1566,7 @@ function GameWorld({
           castShadow
           position={[50, 50, 20]}
           intensity={1.2}
-          shadow-mapSize={[2048, 2048]}
+          shadow-mapSize={[preset.shadowMapSize, preset.shadowMapSize]}
           shadow-camera-left={-40}
           shadow-camera-right={40}
           shadow-camera-top={40}
@@ -1652,7 +1659,17 @@ function GameWorld({
       <HealthBar hp={missionState.playerHp} maxHp={missionState.maxHp} />
       <div className={`damage-vignette ${damageFlash ? "active" : ""}`} />
 
-      <TouchControls dragon={dragon} joy={joy} abilityState={abilityState} />
+      {isTouchDevice &&
+        (controlScheme === "buttons" ? (
+          <DPadControls joy={joy} abilityState={abilityState} />
+        ) : (
+          <TouchControls
+            dragon={dragon}
+            joy={joy}
+            abilityState={abilityState}
+            maxDist={preset.joystickMaxDist}
+          />
+        ))}
 
       <DragonSwitcher current={dragon} onSwap={onSwap} />
 
@@ -1664,6 +1681,27 @@ function GameWorld({
         </span>
         <span className="hud-home-label">MISSIONS</span>
       </button>
+
+      <button
+        type="button"
+        className="hud-settings-btn"
+        title="Settings"
+        aria-label="Settings"
+        onClick={() => setShowSettings(true)}
+      >
+        <svg viewBox="0 0 20 20" fill="currentColor" width="20" height="20">
+          <path d="M11.5 2.1l.9 2a6.1 6.1 0 011.4.8l2-.6a8 8 0 011.4 2.4l-1.2 1.7c.1.5.1 1 0 1.6l1.2 1.7a8 8 0 01-1.4 2.4l-2-.6c-.4.3-.9.6-1.4.8l-.9 2a8 8 0 01-3 0l-.9-2a6.1 6.1 0 01-1.4-.8l-2 .6a8 8 0 01-1.4-2.4l1.2-1.7a6 6 0 010-1.6L2.8 7.5a8 8 0 011.4-2.4l2 .6c.4-.3.9-.6 1.4-.8l.9-2a8 8 0 013 0zM10 7.5a2.5 2.5 0 100 5 2.5 2.5 0 000-5z" />
+        </svg>
+      </button>
+
+      {showSettings && (
+        <SettingsPanel
+          onClose={() => {
+            setShowSettings(false);
+            setControlScheme(settings.scheme);
+          }}
+        />
+      )}
     </div>
   );
 }

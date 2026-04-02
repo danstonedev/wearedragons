@@ -2,6 +2,13 @@
    Game UI — In-Game HUD, Switcher, Mission Screens
    ============================================================ */
 
+/* ---- iOS Safe-Area Helpers ---- */
+/* Prevent rubber-band overscroll and double-tap zoom on the game container */
+html, body, #root {
+    overscroll-behavior: none;
+    touch-action: manipulation;
+}
+
 /* ---- In-Game Switcher ---- */
 .switcher-shell {
     position: absolute;
@@ -696,7 +703,7 @@
 /* ---- Health Bar ---- */
 .health-bar-container {
     position: absolute;
-    bottom: 20px;
+    bottom: calc(20px + env(safe-area-inset-bottom, 0px));
     left: 50%;
     transform: translateX(-50%);
     width: 200px;
@@ -732,8 +739,8 @@
 /* ---- Home Button ---- */
 .hud-home-btn {
     position: absolute;
-    bottom: 20px;
-    left: 20px;
+    bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+    left: calc(20px + env(safe-area-inset-left, 0px));
     display: flex;
     align-items: center;
     gap: 8px;
@@ -781,6 +788,48 @@
         left: 14px;
         padding: 9px 14px;
         font-size: 0.64rem;
+    }
+}
+
+/* ---- Settings Gear Button ---- */
+.hud-settings-btn {
+    position: absolute;
+    bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border: 1px solid rgba(200, 160, 100, 0.15);
+    border-radius: 50%;
+    background: linear-gradient(180deg, rgba(18, 14, 11, 0.85), rgba(8, 6, 5, 0.9));
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+    color: rgba(200, 160, 100, 0.55);
+    cursor: pointer;
+    pointer-events: auto;
+    z-index: 20;
+    transition: border-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
+}
+
+.hud-settings-btn:hover {
+    border-color: rgba(255, 180, 60, 0.35);
+    color: rgba(255, 220, 160, 0.85);
+    transform: translateX(-50%) translateY(-2px);
+}
+
+.hud-settings-btn:active {
+    transform: translateX(-50%) translateY(0);
+}
+
+@media (max-width: 720px) {
+    .hud-settings-btn {
+        bottom: 14px;
+        width: 40px;
+        height: 40px;
     }
 }
 

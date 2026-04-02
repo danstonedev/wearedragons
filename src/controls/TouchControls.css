@@ -14,10 +14,10 @@
 
 .touch-stick-zone {
     position: absolute;
-    bottom: 24px;
-    left: 16px;
-    width: 180px;
-    height: 180px;
+    bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+    left: calc(10px + env(safe-area-inset-left, 0px));
+    width: 240px;
+    height: 240px;
     pointer-events: auto;
     touch-action: none;
     display: flex;
@@ -26,8 +26,8 @@
 }
 
 .touch-stick-base {
-    width: 130px;
-    height: 130px;
+    width: 180px;
+    height: 180px;
     border-radius: 50%;
     position: relative;
     background: radial-gradient(circle, rgba(30, 20, 10, 0.5) 0%, rgba(20, 14, 8, 0.75) 100%);
@@ -67,8 +67,8 @@
 }
 
 .touch-stick-thumb {
-    width: 52px;
-    height: 52px;
+    width: 64px;
+    height: 64px;
     border-radius: 50%;
     position: absolute;
     top: 50%;
@@ -89,26 +89,26 @@
 /* Directional hints */
 .touch-stick-hint {
     position: absolute;
-    font-size: 7px;
+    font-size: 9px;
     font-weight: 700;
     letter-spacing: 1.5px;
-    color: rgba(200, 160, 100, 0.15);
+    color: rgba(200, 160, 100, 0.18);
     text-transform: uppercase;
     pointer-events: none;
 }
 
-.touch-stick-hint.up { top: 4px; left: 50%; transform: translateX(-50%); }
-.touch-stick-hint.down { bottom: 4px; left: 50%; transform: translateX(-50%); }
-.touch-stick-hint.left { left: 6px; top: 50%; transform: translateY(-50%); }
-.touch-stick-hint.right { right: 6px; top: 50%; transform: translateY(-50%); }
+.touch-stick-hint.up { top: 8px; left: 50%; transform: translateX(-50%); }
+.touch-stick-hint.down { bottom: 8px; left: 50%; transform: translateX(-50%); }
+.touch-stick-hint.left { left: 10px; top: 50%; transform: translateY(-50%); }
+.touch-stick-hint.right { right: 10px; top: 50%; transform: translateY(-50%); }
 
 /* ---- Speed Gauge (Below Stick) ---- */
 
 .touch-speed-gauge {
     position: absolute;
-    bottom: 10px;
-    left: 56px;
-    width: 76px;
+    bottom: calc(4px + env(safe-area-inset-bottom, 0px));
+    left: calc(78px + env(safe-area-inset-left, 0px));
+    width: 90px;
     pointer-events: none;
 }
 
@@ -160,8 +160,8 @@
 /* ---- Fire Button ---- */
 
 .touch-btn-fire {
-    right: 32px;
-    bottom: 40px;
+    right: calc(32px + env(safe-area-inset-right, 0px));
+    bottom: calc(40px + env(safe-area-inset-bottom, 0px));
     width: 76px;
     height: 76px;
     background: radial-gradient(circle at 40% 35%, rgba(200, 60, 10, 0.5), rgba(140, 30, 0, 0.65));
@@ -204,8 +204,8 @@
 /* ---- Special Button ---- */
 
 .touch-btn-special {
-    right: 96px;
-    bottom: 128px;
+    right: calc(96px + env(safe-area-inset-right, 0px));
+    bottom: calc(128px + env(safe-area-inset-bottom, 0px));
     width: 64px;
     height: 64px;
     background: radial-gradient(circle at 40% 35%, rgba(50, 90, 180, 0.45), rgba(30, 60, 140, 0.6));
@@ -261,4 +261,65 @@
     border-radius: 50%;
     pointer-events: none;
     z-index: 0;
+}
+
+/* ---- iPad: larger controls, more spread out ---- */
+@media (min-width: 768px) and (pointer: coarse) {
+    .touch-stick-zone {
+        width: 280px;
+        height: 280px;
+        bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+    }
+    .touch-stick-base {
+        width: 210px;
+        height: 210px;
+    }
+    .touch-stick-thumb {
+        width: 76px;
+        height: 76px;
+    }
+    .touch-stick-hint {
+        font-size: 11px;
+    }
+    .touch-btn-fire {
+        width: 90px;
+        height: 90px;
+    }
+    .touch-btn-fire .touch-btn-label {
+        font-size: 16px;
+    }
+    .touch-btn-special {
+        width: 74px;
+        height: 74px;
+    }
+}
+
+/* ---- iPhone / small phones: compact but touchable ---- */
+@media (max-width: 480px) and (pointer: coarse) {
+    .touch-stick-zone {
+        width: 200px;
+        height: 200px;
+        bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+        left: calc(6px + env(safe-area-inset-left, 0px));
+    }
+    .touch-stick-base {
+        width: 150px;
+        height: 150px;
+    }
+    .touch-stick-thumb {
+        width: 56px;
+        height: 56px;
+    }
+    .touch-btn-fire {
+        right: calc(20px + env(safe-area-inset-right, 0px));
+        bottom: calc(28px + env(safe-area-inset-bottom, 0px));
+        width: 70px;
+        height: 70px;
+    }
+    .touch-btn-special {
+        right: calc(80px + env(safe-area-inset-right, 0px));
+        bottom: calc(108px + env(safe-area-inset-bottom, 0px));
+        width: 58px;
+        height: 58px;
+    }
 }

@@ -24,7 +24,7 @@ interface AbilityHUDState {
 
 function SteeringStick({
   joy,
-  maxDist = 48,
+  maxDist = 68,
 }: {
   joy: JoyState;
   maxDist?: number;
@@ -251,14 +251,16 @@ function SpecialButton({
 export default function TouchControls({
   joy,
   abilityState,
+  maxDist,
 }: {
   dragon: DragonType;
   joy: JoyState;
   abilityState: AbilityHUDState;
+  maxDist?: number;
 }) {
   return (
     <div className="touch-controls">
-      <SteeringStick joy={joy} />
+      <SteeringStick joy={joy} maxDist={maxDist} />
       <SpeedGauge joy={joy} />
       <FireButton joy={joy} />
       <SpecialButton joy={joy} abilityState={abilityState} />
