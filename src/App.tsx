@@ -42,6 +42,8 @@ import type {
 import "./App.css";
 import TouchControls from "./controls/TouchControls";
 
+const DRAGON_MODEL = `${import.meta.env.BASE_URL}dragon.glb`;
+
 const keys: Record<string, boolean> = {};
 const joy = {
   left: { x: 0, y: 0 },
@@ -87,7 +89,7 @@ function BlockyDragon({ dragon }: { dragon: DragonType }) {
   const lastSpecialTimeRef = useRef(-999);
 
   const { rapier, world } = useRapier();
-  const { scene, animations: rawAnimations } = useGLTF("/dragon.glb");
+  const { scene, animations: rawAnimations } = useGLTF(DRAGON_MODEL);
 
   // Strip static tracks from animations to reduce per-frame evaluation (~73% are no-ops)
   const animations = useMemo(() => {

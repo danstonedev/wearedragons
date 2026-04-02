@@ -17,6 +17,8 @@ import "./DragonSelect.css";
 
 import { SkeletonUtils } from "three-stdlib";
 
+const DRAGON_MODEL = `${import.meta.env.BASE_URL}dragon.glb`;
+
 /* ---- Tribe atmosphere config ---- */
 const TRIBE_ATMOSPHERE: Record<
   string,
@@ -71,7 +73,7 @@ function DragonModel({
   previewAnim?: { name: string; key: number };
 }) {
   const groupRef = useRef<THREE.Group>(null);
-  const { scene, animations } = useGLTF("/dragon.glb");
+  const { scene, animations } = useGLTF(DRAGON_MODEL);
   const activeRef = useRef<string>("Dragon_Flying");
 
   const clonedScene = useMemo(() => {
