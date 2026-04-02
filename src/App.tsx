@@ -1391,12 +1391,14 @@ function GameWorld({
   dragon,
   mission,
   onSwap,
+  onHome,
   missionState,
   onMissionUpdate,
 }: {
   dragon: DragonType;
   mission: MissionDefinition;
   onSwap: (d: DragonType) => void;
+  onHome: () => void;
   missionState: MissionRuntimeState;
   onMissionUpdate: (s: MissionRuntimeState) => void;
 }) {
@@ -1653,6 +1655,15 @@ function GameWorld({
       <TouchControls dragon={dragon} joy={joy} abilityState={abilityState} />
 
       <DragonSwitcher current={dragon} onSwap={onSwap} />
+
+      <button type="button" className="hud-home-btn" onClick={onHome}>
+        <span className="hud-home-icon" aria-hidden="true">
+          <svg viewBox="0 0 20 20" fill="currentColor" width="18" height="18">
+            <path d="M10 2.5L2 9h2v8.5h5v-5h2v5h5V9h2L10 2.5z" />
+          </svg>
+        </span>
+        <span className="hud-home-label">MISSIONS</span>
+      </button>
     </div>
   );
 }
@@ -1742,6 +1753,7 @@ export default function App() {
       dragon={selectedDragon}
       mission={currentMission}
       onSwap={setSelectedDragon}
+      onHome={() => setScreen("mission_select")}
       missionState={missionState}
       onMissionUpdate={setMissionState}
     />
