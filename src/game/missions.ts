@@ -12,7 +12,8 @@ export type MissionObjectiveType =
   | "destroy_targets"
   | "reach_beacon"
   | "survive"
-  | "race_checkpoint";
+  | "race_checkpoint"
+  | "smash_blocks";
 
 export interface MissionObjectiveDefinition {
   id: string;
@@ -27,7 +28,7 @@ export interface MissionDefinition {
   description: string;
   briefing: string;
   region: "pyrrhia" | "pantala" | "glaeryus";
-  type: "fortress_raid" | "beacon_run" | "hunter_ambush";
+  type: "fortress_raid" | "beacon_run" | "hunter_ambush" | "jade_citadel";
   timeLimitSeconds?: number;
   objectives: MissionObjectiveDefinition[];
   recommendedDragons?: string[];
@@ -121,6 +122,28 @@ export const MISSIONS: MissionDefinition[] = [
     recommendedDragons: ["nightwing", "icewing", "bladewing", "hivewing"],
     starThresholds: { three: 80, two: 50, one: 0 },
     starMetric: "hp",
+  },
+  {
+    id: "jade_citadel",
+    name: "Jade Citadel Strike",
+    description:
+      "An ancient RiceWing citadel guards the Glaeryus valley mouth. Tear it down before reinforcements arrive.",
+    briefing:
+      "The Jade Citadel has stood for a thousand years, blocking safe passage through the Glaeryus valley. Its ivory walls are thick — but nothing survives a dragon in full fury. Smash at least 40 of the 64 stone blocks before the garrison can rebuild. Hit fast, hit hard.",
+    region: "glaeryus",
+    type: "jade_citadel",
+    timeLimitSeconds: 120,
+    objectives: [
+      {
+        id: "smash_blocks",
+        type: "smash_blocks",
+        label: "Smash the citadel walls",
+        requiredCount: 40,
+      },
+    ],
+    recommendedDragons: ["mudwing", "bonewing", "bladewing", "skywing"],
+    starThresholds: { three: 50, two: 85, one: 120 },
+    starMetric: "time",
   },
 ];
 

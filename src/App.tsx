@@ -1441,15 +1441,24 @@ function GameWorld({
       setDamageFlash(true);
       setTimeout(() => setDamageFlash(false), 200);
     };
+    const onBlockSmashed = () => {
+      if (missionType === "jade_citadel") {
+        onMissionUpdate(
+          advanceObjective(missionState, mission, "smash_blocks"),
+        );
+      }
+    };
     missionEmitter.addEventListener("tower_destroyed", onTowerDestroyed);
     missionEmitter.addEventListener("beacon_reached", onBeaconReached);
     missionEmitter.addEventListener("checkpoint_reached", onCheckpoint);
     missionEmitter.addEventListener("player_hit", onPlayerHit);
+    missionEmitter.addEventListener("castle_block_smashed", onBlockSmashed);
     return () => {
       missionEmitter.removeEventListener("tower_destroyed", onTowerDestroyed);
       missionEmitter.removeEventListener("beacon_reached", onBeaconReached);
       missionEmitter.removeEventListener("checkpoint_reached", onCheckpoint);
       missionEmitter.removeEventListener("player_hit", onPlayerHit);
+      missionEmitter.removeEventListener("castle_block_smashed", onBlockSmashed);
     };
   }, [missionType, beaconActive, missionState, mission, onMissionUpdate]);
 
@@ -1539,6 +1548,7 @@ function GameWorld({
       <Canvas
         shadows={{ type: THREE.PCFShadowMap }}
         camera={{ position: [0, 5, 10], fov: 60 }}
+        dpr={[1, 1.5]}
       >
         <Sky sunPosition={[100, 20, 100]} />
         <Environment preset="sunset" />
@@ -1582,9 +1592,14 @@ function GameWorld({
             />
           )}
 
+          {/* Jade Citadel Strike: smashable castle */}
+          {missionType === "jade_citadel" && <SmashableCastle />}
+
           <BlockyDragon dragon={dragon} />
           <Projectiles />
-          {missionType !== "beacon_run" && <EnemyProjectiles />}
+          {missionType !== "beacon_run" && missionType !== "jade_citadel" && (
+            <EnemyProjectiles />
+          )}
         </Physics>
       </Canvas>
 
