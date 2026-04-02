@@ -1,0 +1,746 @@
+/* ============================================================
+   Game UI — In-Game HUD, Switcher, Mission Screens
+   ============================================================ */
+
+/* ---- In-Game Switcher ---- */
+.switcher-shell {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    width: min(360px, calc(100vw - 24px));
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    z-index: 20;
+    pointer-events: auto;
+    font-family: 'Inter', sans-serif;
+}
+
+.switcher-summary {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    border-radius: 20px;
+    border: 1px solid rgba(255, 247, 237, 0.18);
+    background:
+        linear-gradient(180deg, rgba(18, 14, 11, 0.92), rgba(8, 6, 5, 0.94)),
+        radial-gradient(circle at top left, rgba(255, 255, 255, 0.05), transparent 55%);
+    -webkit-backdrop-filter: blur(16px);
+    backdrop-filter: blur(16px);
+    color: #fff7ed;
+    cursor: pointer;
+    transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+    text-align: left;
+}
+
+.switcher-summary:hover {
+    transform: translateY(-1px);
+    border-color: rgba(255, 247, 237, 0.3);
+}
+
+.switcher-summary:focus-visible,
+.switcher-tribe-btn:focus-visible,
+.switcher-item:focus-visible {
+    outline: 2px solid rgba(255, 247, 237, 0.92);
+    outline-offset: 2px;
+}
+
+.switcher-summary-swatch {
+    width: 18px;
+    height: 18px;
+    border-radius: 999px;
+    flex-shrink: 0;
+}
+
+.switcher-summary-name {
+    flex: 1;
+    min-width: 0;
+    font-family: 'Cinzel', serif;
+    font-size: 1.7rem;
+    line-height: 1;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+}
+
+.switcher-summary-chevron {
+    width: 32px;
+    height: 32px;
+    display: grid;
+    place-items: center;
+    border-radius: 999px;
+    background: rgba(255, 247, 237, 0.08);
+    color: rgba(255, 247, 237, 0.82);
+    font-size: 1rem;
+    transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.switcher-shell.open .switcher-summary-chevron {
+    transform: rotate(180deg);
+    background: rgba(255, 247, 237, 0.14);
+}
+
+.switcher-panel {
+    overflow: hidden;
+    max-height: 0;
+    opacity: 0;
+    transform: translateY(-8px);
+    pointer-events: none;
+    border: 1px solid rgba(255, 247, 237, 0.12);
+    border-radius: 24px;
+    background:
+        linear-gradient(180deg, rgba(13, 10, 8, 0.96), rgba(7, 6, 5, 0.98)),
+        radial-gradient(circle at top, rgba(255, 255, 255, 0.05), transparent 45%);
+    -webkit-backdrop-filter: blur(20px);
+    backdrop-filter: blur(20px);
+    transition:
+        max-height 0.32s ease,
+        opacity 0.22s ease,
+        transform 0.22s ease;
+}
+
+.switcher-shell.open .switcher-panel {
+    max-height: min(72vh, 680px);
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+}
+
+.switcher-panel-top {
+    padding: 16px 18px 8px;
+}
+
+.switcher-title {
+    font-family: 'Cinzel', serif;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: rgba(255, 247, 237, 0.62);
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    margin: 0;
+}
+
+.switcher-subtitle {
+    margin: 6px 0 0;
+    font-size: 0.86rem;
+    line-height: 1.45;
+    color: rgba(255, 239, 220, 0.78);
+}
+
+.switcher-tribe-row {
+    display: flex;
+    gap: 8px;
+    padding: 8px 18px 12px;
+    flex-shrink: 0;
+}
+
+.switcher-tribe-btn {
+    flex: 1;
+    min-height: 40px;
+    padding: 0 10px;
+    border: 1px solid rgba(255, 247, 237, 0.1);
+    border-radius: 999px;
+    background: rgba(255, 247, 237, 0.05);
+    color: rgba(255, 239, 220, 0.82);
+    font-family: 'Cinzel', serif;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+}
+
+.switcher-tribe-btn:hover {
+    background: rgba(255, 247, 237, 0.1);
+    border-color: rgba(255, 247, 237, 0.2);
+    transform: translateY(-1px);
+}
+
+.switcher-tribe-btn.active {
+    color: #fff7ed;
+}
+
+.switcher-list {
+    padding: 0 12px 12px;
+    max-height: calc(min(72vh, 680px) - 130px);
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 247, 237, 0.14) transparent;
+}
+
+.switcher-item {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 14px;
+    margin-bottom: 8px;
+    border-radius: 18px;
+    border: 1px solid rgba(255, 247, 237, 0.08);
+    background: rgba(255, 247, 237, 0.03);
+    text-align: left;
+    color: inherit;
+    cursor: pointer;
+    transition: transform 0.18s ease, background 0.18s ease, border-color 0.18s ease;
+    font-family: inherit;
+}
+
+.switcher-item:hover {
+    transform: translateX(-2px);
+    background: rgba(255, 247, 237, 0.07);
+    border-color: rgba(255, 247, 237, 0.16);
+}
+
+.switcher-item.active {
+    background: rgba(255, 247, 237, 0.08);
+}
+
+.switcher-swatch {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    border: 1px solid rgba(255, 247, 237, 0.14);
+}
+
+.switcher-item-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.switcher-item-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+
+.switcher-item-name {
+    font-family: 'Cinzel', serif;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #fff7ed;
+    margin: 0;
+    text-transform: uppercase;
+}
+
+.switcher-current-badge {
+    display: inline-flex;
+    align-items: center;
+    min-height: 22px;
+    padding: 0 8px;
+    border-radius: 999px;
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.switcher-item-ability {
+    font-size: 0.86rem;
+    color: rgba(255, 239, 220, 0.72);
+    margin: 0;
+}
+
+.switcher-item-stats {
+    display: flex;
+    gap: 4px;
+    align-self: stretch;
+    align-items: center;
+}
+
+.switcher-mini-bar {
+    width: 5px;
+    height: 28px;
+    background: rgba(255, 247, 237, 0.08);
+    border-radius: 999px;
+    position: relative;
+    overflow: hidden;
+}
+
+.switcher-mini-fill {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    border-radius: 999px;
+}
+
+@media (max-width: 720px) {
+    .switcher-shell {
+        top: 12px;
+        right: 12px;
+        width: min(340px, calc(100vw - 24px));
+    }
+
+    .switcher-summary {
+        padding: 12px 14px;
+        border-radius: 18px;
+    }
+
+    .switcher-summary-name {
+        font-size: 1.35rem;
+    }
+
+    .switcher-title {
+        font-size: 0.74rem;
+    }
+
+    .switcher-subtitle {
+        font-size: 0.8rem;
+    }
+
+    .switcher-tribe-row {
+        gap: 6px;
+        padding: 8px 14px 10px;
+    }
+
+    .switcher-tribe-btn {
+        min-height: 36px;
+        font-size: 0.66rem;
+        letter-spacing: 0.05em;
+    }
+
+    .switcher-list {
+        padding: 0 10px 10px;
+    }
+
+    .switcher-item {
+        gap: 12px;
+        padding: 12px;
+    }
+
+    .switcher-item-name {
+        font-size: 0.98rem;
+    }
+
+    .switcher-item-ability {
+        font-size: 0.78rem;
+    }
+}
+
+/* ---- Mission Brief Screen ---- */
+.brief-screen {
+    width: 100vw;
+    height: 100vh;
+    background: linear-gradient(180deg, #08060a 0%, #0d0a06 40%, #120a04 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+    color: #d4c8b0;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+.brief-card {
+    max-width: 520px;
+    width: 90%;
+    background: rgba(180, 160, 120, 0.03);
+    border: 1px solid rgba(180, 160, 120, 0.08);
+    border-radius: 6px;
+    padding: 40px 36px;
+    text-align: center;
+}
+
+.brief-region {
+    font-family: 'Inter', sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 4px;
+    color: rgba(200, 180, 140, 0.55);
+    margin-bottom: 8px;
+    text-transform: uppercase;
+}
+
+.brief-title {
+    font-family: 'Cinzel', 'Georgia', serif;
+    font-size: 34px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    margin: 0 0 16px;
+    color: #e8dcc8;
+}
+
+.brief-text {
+    color: rgba(200, 180, 140, 0.6);
+    font-size: 14px;
+    line-height: 1.7;
+    margin: 0 0 28px;
+}
+
+.brief-objectives {
+    text-align: left;
+    margin-bottom: 24px;
+    padding: 16px 20px;
+    background: rgba(180, 160, 120, 0.03);
+    border-radius: 4px;
+    border: 1px solid rgba(180, 160, 120, 0.06);
+}
+
+.brief-objectives-title {
+    font-family: 'Cinzel', serif;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    color: rgba(200, 180, 140, 0.55);
+    margin: 0 0 12px;
+    text-transform: uppercase;
+}
+
+.brief-objective-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 0;
+    font-size: 14px;
+    color: #c8b89a;
+}
+
+.brief-objective-icon {
+    color: #c8a050;
+    font-size: 12px;
+}
+
+.brief-recommended {
+    font-size: 12px;
+    color: rgba(200, 180, 140, 0.55);
+    margin-bottom: 20px;
+}
+
+.brief-recommended-label {
+    font-weight: 700;
+    letter-spacing: 1px;
+}
+
+.brief-dragon-info {
+    font-size: 14px;
+    color: rgba(200, 180, 140, 0.6);
+    margin-bottom: 28px;
+}
+
+.brief-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+}
+
+.brief-btn {
+    padding: 14px 32px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: 'Cinzel', serif;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    transition: all 0.2s ease;
+}
+
+.brief-btn:hover {
+    transform: translateY(-2px);
+    filter: brightness(1.15);
+}
+
+.brief-btn-back {
+    background: rgba(180, 160, 120, 0.08);
+    color: rgba(200, 180, 140, 0.7);
+    border: 1px solid rgba(180, 160, 120, 0.15);
+}
+
+.brief-btn-start {
+    color: #fff;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+}
+
+/* ---- Mission Select ---- */
+.mission-select-shell {
+    max-width: 700px;
+    width: 90%;
+}
+
+.mission-select-header {
+    text-align: center;
+    margin-bottom: 32px;
+}
+
+.mission-select-flying {
+    font-family: 'Inter', sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 4px;
+    color: rgba(180, 160, 120, 0.5);
+    margin-bottom: 6px;
+    text-transform: uppercase;
+}
+
+.mission-select-title {
+    font-family: 'Cinzel', 'Georgia', serif;
+    font-size: 34px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    margin: 0;
+    color: #e8dcc8;
+}
+
+.mission-select-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.mission-select-card {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 18px 24px;
+    background: rgba(180, 160, 120, 0.03);
+    border: 1px solid rgba(180, 160, 120, 0.08);
+    border-radius: 6px;
+    cursor: pointer;
+    text-align: left;
+    color: inherit;
+    font-family: 'Inter', sans-serif;
+    transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+    position: relative;
+}
+
+.mission-select-card:hover {
+    background: rgba(180, 160, 120, 0.06);
+    border-color: rgba(180, 160, 120, 0.15);
+    transform: translateX(4px);
+}
+
+.mission-select-card:focus-visible {
+    outline: 2px solid rgba(232, 220, 200, 0.92);
+    outline-offset: 2px;
+}
+
+.mission-select-type {
+    padding: 6px 12px;
+    border-radius: 4px;
+    background: color-mix(in srgb, var(--mission-type-color) 13%, transparent);
+    border: 1px solid color-mix(in srgb, var(--mission-type-color) 27%, transparent);
+    color: var(--mission-type-color);
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.mission-select-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.mission-select-name {
+    font-family: 'Cinzel', 'Georgia', serif;
+    font-size: 15px;
+    font-weight: 700;
+    color: #d4c8b0;
+    margin-bottom: 3px;
+}
+
+.mission-select-description {
+    font-size: 12px;
+    color: rgba(180, 160, 120, 0.55);
+    line-height: 1.4;
+}
+
+.mission-select-recommended {
+    padding: 4px 10px;
+    border-radius: 4px;
+    background: color-mix(in srgb, var(--mission-accent-color) 13%, transparent);
+    border: 1px solid color-mix(in srgb, var(--mission-accent-color) 27%, transparent);
+    color: var(--mission-accent-color);
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    flex-shrink: 0;
+}
+
+.mission-select-timer {
+    font-size: 12px;
+    color: rgba(180, 160, 120, 0.5);
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
+.mission-select-region {
+    font-size: 10px;
+    color: rgba(180, 160, 120, 0.4);
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    flex-shrink: 0;
+}
+
+.mission-select-actions {
+    text-align: center;
+    margin-top: 28px;
+}
+
+@media (max-width: 720px) {
+    .mission-select-card {
+        flex-wrap: wrap;
+        align-items: flex-start;
+        gap: 10px 12px;
+        padding: 16px 18px;
+    }
+
+    .mission-select-info {
+        min-width: min(220px, 100%);
+    }
+
+    .mission-select-region {
+        margin-left: auto;
+    }
+}
+
+/* ---- Mission Result Overlay ---- */
+.result-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.88);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+    color: #d4c8b0;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+}
+
+.result-card {
+    max-width: 440px;
+    width: 90%;
+    text-align: center;
+    padding: 48px 36px;
+}
+
+.result-badge {
+    font-family: 'Cinzel', serif;
+    font-size: 14px;
+    font-weight: 900;
+    letter-spacing: 4px;
+    margin-bottom: 8px;
+}
+
+.result-mission-name {
+    font-family: 'Cinzel', serif;
+    font-size: 28px;
+    font-weight: 700;
+    margin: 0 0 16px;
+    color: #e8dcc8;
+}
+
+.result-text {
+    color: rgba(200, 180, 140, 0.65);
+    font-size: 14px;
+    line-height: 1.7;
+    margin: 0 0 24px;
+}
+
+.result-dragon {
+    font-family: 'Cinzel', serif;
+    font-size: 16px;
+    font-weight: 700;
+    margin-bottom: 32px;
+}
+
+/* ---- Mission HUD ---- */
+.mission-hud {
+    position: absolute;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    text-align: center;
+    pointer-events: none;
+    z-index: 10;
+    font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+}
+
+.mission-hud-name {
+    font-family: 'Cinzel', serif;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    color: rgba(220, 200, 170, 0.8);
+    text-shadow: 0 1px 6px rgba(0, 0, 0, 0.8);
+    margin: 0 0 4px;
+    text-transform: uppercase;
+}
+
+.mission-hud-objective {
+    font-size: 16px;
+    font-weight: 700;
+    color: #e8b848;
+    margin: 0 0 4px;
+    text-shadow: 0 1px 6px rgba(0, 0, 0, 0.8);
+}
+
+.mission-hud-progress {
+    font-size: 13px;
+    color: rgba(220, 200, 170, 0.75);
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.7);
+}
+
+/* ---- Health Bar ---- */
+.health-bar-container {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 200px;
+    pointer-events: none;
+    z-index: 10;
+    font-family: 'Inter', sans-serif;
+    text-align: center;
+}
+
+.health-bar-track {
+    width: 100%;
+    height: 8px;
+    background: rgba(0, 0, 0, 0.35);
+    border-radius: 2px;
+    overflow: hidden;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+
+.health-bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.3s ease, background 0.3s ease;
+}
+
+.health-bar-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    margin-top: 4px;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+}
+
+/* ---- Damage Flash ---- */
+.damage-vignette {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 50;
+    border-radius: 0;
+    box-shadow: inset 0 0 80px rgba(255, 0, 0, 0.6);
+    opacity: 0;
+    transition: opacity 0.15s ease;
+}
+
+.damage-vignette.active {
+    opacity: 1;
+}
