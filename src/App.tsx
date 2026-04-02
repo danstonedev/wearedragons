@@ -48,7 +48,7 @@ import { settings } from "./controls/ControlSettings";
 import ModeSelect from "./ModeSelect";
 import { WORLD_REGIONS, getRegionAtPos } from "./game/worlds";
 import type { WorldRegion } from "./game/worlds";
-import { preset, isTouchDevice, device } from "./utils/device";
+import { isTouchDevice } from "./utils/device";
 
 const DRAGON_MODEL = `${import.meta.env.BASE_URL}dragon.glb`;
 
