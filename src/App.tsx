@@ -123,6 +123,10 @@ function BlockyDragon({ dragon }: { dragon: DragonType }) {
   const _spawnPos = useMemo(() => new THREE.Vector3(), []);
   const _fireVel = useMemo(() => new THREE.Vector3(), []);
   const _fireEuler = useMemo(() => new THREE.Euler(), []);
+  const _ray = useMemo(
+    () => new rapier.Ray({ x: 0, y: 0, z: 0 }, { x: 0, y: -1, z: 0 }),
+    [rapier],
+  );
 
   useEffect(() => {
     const flyAction = actions["Dragon_Flying"] ?? Object.values(actions)[0];
@@ -290,7 +294,7 @@ function BlockyDragon({ dragon }: { dragon: DragonType }) {
       visualGroupRef.current.rotation.y -= dx * 2.5 * s.agility * delta;
     }
 
-    let targetBank = (dx * Math.PI) / 6;
+    let targetBank = (-dx * Math.PI) / 6;
     if (rollRef.current > 0)
       targetBank = (rollRef.current / spec.duration) * Math.PI * 4;
     visualGroupRef.current.rotation.z =
@@ -309,11 +313,10 @@ function BlockyDragon({ dragon }: { dragon: DragonType }) {
     const minAltitude = 1.2;
 
     // Raycast down for ground detection
-    const ray = new rapier.Ray(
-      { x: pos.x, y: pos.y, z: pos.z },
-      { x: 0, y: -1, z: 0 },
-    );
-    const hit = world.castRay(ray, 50, true);
+    _ray.origin.x = pos.x;
+    _ray.origin.y = pos.y;
+    _ray.origin.z = pos.z;
+    const hit = world.castRay(_ray, 50, true);
     const groundY = hit ? pos.y - hit.timeOfImpact : 0;
     const altitudeAboveGround = pos.y - groundY;
     const grounded = altitudeAboveGround < minAltitude + 0.2;
@@ -406,8 +409,8 @@ function BlockyDragon({ dragon }: { dragon: DragonType }) {
     } else {
       // Flying: reset to neutral
       scene.position.y = THREE.MathUtils.lerp(scene.position.y, 0, 6 * delta);
-      // Slight pitch up when climbing, down when diving
-      const pitchTarget = fvy > 5 ? -0.1 : fvy < -5 ? 0.15 : 0;
+      // Pitch up when climbing, down when diving — proportional to input
+      const pitchTarget = -dy * 0.35;
       scene.rotation.x = THREE.MathUtils.lerp(
         scene.rotation.x,
         pitchTarget,
@@ -512,68 +515,148 @@ function Projectiles() {
 }
 
 function Forest() {
-  const trees = useMemo(
-    () =>
-      Array.from({ length: 50 })
-        .map((_, i) => {
-          const x = (Math.random() - 0.5) * 120;
-          const z = (Math.random() - 0.5) * 120;
-          const scale = 0.5 + Math.random() * 1.5;
-          if (Math.abs(x) < 15 && Math.abs(z) < 15) return null;
-          return {
-            id: i,
-            position: [x, 0, z] as [number, number, number],
-            scale,
-          };
-        })
-        .filter(Boolean),
+  const trees = useMemo(() => {
+    const result: { x: number; z: number; scale: number }[] = [];
+    for (let i = 0; i < 80 && result.length < 50; i++) {
+      const x = (Math.random() - 0.5) * 120;
+      const z = (Math.random() - 0.5) * 120;
+      if (Math.abs(x) < 15 && Math.abs(z) < 15) continue;
+      result.push({ x, z, scale: 0.5 + Math.random() * 1.5 });
+    }
+    return result;
+  }, []);
+
+  const trunkGeo = useMemo(() => new THREE.CylinderGeometry(0.3, 0.4, 2), []);
+  const canopyGeo = useMemo(() => new THREE.ConeGeometry(1.5, 3, 8), []);
+  const trunkMat = useMemo(
+    () => new THREE.MeshStandardMaterial({ color: "#4a3018" }),
+    [],
+  );
+  const canopyMat = useMemo(
+    () => new THREE.MeshStandardMaterial({ color: "#2d5c2f" }),
     [],
   );
 
+  const trunkRef = useRef<THREE.InstancedMesh>(null);
+  const canopyRef = useRef<THREE.InstancedMesh>(null);
+
+  useEffect(() => {
+    const dummy = new THREE.Object3D();
+    trees.forEach(({ x, z, scale }, i) => {
+      // Trunk: CylinderGeometry centered at origin, positioned at y=scale (1*scale)
+      dummy.position.set(x, scale, z);
+      dummy.scale.setScalar(scale);
+      dummy.updateMatrix();
+      trunkRef.current?.setMatrixAt(i, dummy.matrix);
+      // Canopy: cone positioned at y=3*scale
+      dummy.position.set(x, scale * 3, z);
+      dummy.updateMatrix();
+      canopyRef.current?.setMatrixAt(i, dummy.matrix);
+    });
+    if (trunkRef.current) trunkRef.current.instanceMatrix.needsUpdate = true;
+    if (canopyRef.current) canopyRef.current.instanceMatrix.needsUpdate = true;
+  }, [trees]);
+
   return (
-    <group>
-      {trees.map((t: any) => (
-        <RigidBody
-          key={t.id}
-          type="fixed"
-          position={t.position}
-          colliders="hull"
-        >
-          <group scale={t.scale}>
-            <mesh castShadow receiveShadow position={[0, 1, 0]}>
-              <cylinderGeometry args={[0.3, 0.4, 2]} />
-              <meshStandardMaterial color="#4a3018" />
-            </mesh>
-            <mesh castShadow receiveShadow position={[0, 3, 0]}>
-              <coneGeometry args={[1.5, 3, 8]} />
-              <meshStandardMaterial color="#2d5c2f" />
-            </mesh>
-          </group>
-        </RigidBody>
-      ))}
-    </group>
+    <>
+      <instancedMesh
+        ref={trunkRef}
+        args={[trunkGeo, trunkMat, trees.length]}
+        castShadow
+        receiveShadow
+      />
+      <instancedMesh
+        ref={canopyRef}
+        args={[canopyGeo, canopyMat, trees.length]}
+        castShadow
+        receiveShadow
+      />
+    </>
   );
 }
 
+// Per-layer colors: dark stone at base, ivory marble at top (RiceWing architecture)
+const CASTLE_BLOCK_COLORS = ["#b0a084", "#bcae94", "#c8bca0", "#d8cba8"];
+
 export function SmashableCastle() {
+  const blockDefs = useMemo(() => {
+    const arr: { key: string; lx: number; ly: number; lz: number }[] = [];
+    for (let y = 0; y < 4; y++)
+      for (let x = 0; x < 4; x++)
+        for (let z = 0; z < 4; z++)
+          arr.push({
+            key: `${x}-${y}-${z}`,
+            lx: x * 2 - 3,
+            ly: y * 2 + 1,
+            lz: z * 2 - 3,
+          });
+    return arr;
+  }, []);
+
+  const rbRefs = useRef<(RapierRigidBody | null)[]>(
+    Array(blockDefs.length).fill(null),
+  );
+  const settledPositions = useRef<
+    ({ x: number; y: number; z: number } | null)[]
+  >(Array(blockDefs.length).fill(null));
+  const settledRef = useRef(false);
+  const smashedRef = useRef(new Set<number>());
+
+  // Snapshot block positions after physics settles (~1.5s) to use as smash baselines
+  useEffect(() => {
+    const t = setTimeout(() => {
+      for (let i = 0; i < rbRefs.current.length; i++) {
+        const rb = rbRefs.current[i];
+        if (rb) {
+          const p = rb.translation();
+          settledPositions.current[i] = { x: p.x, y: p.y, z: p.z };
+        }
+      }
+      settledRef.current = true;
+    }, 1500);
+    return () => clearTimeout(t);
+  }, []);
+
+  // Detect blocks displaced > 1.5 units from settled position
+  useFrame(() => {
+    if (!settledRef.current) return;
+    for (let i = 0; i < blockDefs.length; i++) {
+      if (smashedRef.current.has(i)) continue;
+      const rb = rbRefs.current[i];
+      const sp = settledPositions.current[i];
+      if (!rb || !sp) continue;
+      const t = rb.translation();
+      const dx = t.x - sp.x;
+      const dy = t.y - sp.y;
+      const dz = t.z - sp.z;
+      if (dx * dx + dy * dy + dz * dz > 2.25) {
+        smashedRef.current.add(i);
+        missionEmitter.dispatchEvent(new CustomEvent("castle_block_smashed"));
+      }
+    }
+  });
+
   return (
     <group position={[0, 0.5, -25]}>
-      {Array.from({ length: 4 }).map((_, y) =>
-        Array.from({ length: 4 }).map((_, x) =>
-          Array.from({ length: 4 }).map((_, z) => (
-            <RigidBody
-              key={`box-${x}-${y}-${z}`}
-              position={[x * 2 - 3, y * 2 + 1, z * 2 - 3]}
-              mass={0.5}
-            >
-              <mesh castShadow receiveShadow>
-                <boxGeometry args={[1.9, 1.9, 1.9]} />
-                <meshStandardMaterial color="#888" roughness={0.7} />
-              </mesh>
-            </RigidBody>
-          )),
-        ),
-      )}
+      {blockDefs.map((b, i) => (
+        <RigidBody
+          key={b.key}
+          ref={(r: RapierRigidBody | null) => {
+            rbRefs.current[i] = r;
+          }}
+          position={[b.lx, b.ly, b.lz]}
+          mass={0.5}
+        >
+          <mesh castShadow receiveShadow>
+            <boxGeometry args={[1.9, 1.9, 1.9]} />
+            <meshStandardMaterial
+              color={CASTLE_BLOCK_COLORS[Math.floor((b.ly - 1) / 2)]}
+              roughness={0.75}
+              metalness={0.05}
+            />
+          </mesh>
+        </RigidBody>
+      ))}
     </group>
   );
 }
@@ -775,9 +858,10 @@ function EnemyProjectiles() {
 
   // Check proximity to player each frame
   useFrame(() => {
+    const now = Date.now();
     for (const p of projectiles) {
       if (p.hit) continue;
-      const age = (Date.now() - p.timestamp) / 1000;
+      const age = (now - p.timestamp) / 1000;
       const px = p.position[0] + p.velocity[0] * age;
       const py = p.position[1] + p.velocity[1] * age;
       const pz = p.position[2] + p.velocity[2] * age;
