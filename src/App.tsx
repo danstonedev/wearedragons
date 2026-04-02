@@ -40,10 +40,14 @@ import type {
   MissionRuntimeState,
 } from "./game/missions";
 import "./App.css";
+import "./OpenWorld.css";
 import TouchControls from "./controls/TouchControls";
 import DPadControls from "./controls/DPadControls";
 import SettingsPanel from "./SettingsPanel";
 import { settings } from "./controls/ControlSettings";
+import ModeSelect from "./ModeSelect";
+import { WORLD_REGIONS, getRegionAtPos } from "./game/worlds";
+import type { WorldRegion } from "./game/worlds";
 import { preset, isTouchDevice, device } from "./utils/device";
 
 const DRAGON_MODEL = `${import.meta.env.BASE_URL}dragon.glb`;
@@ -1392,6 +1396,724 @@ function DragonSwitcher({
   );
 }
 
+// ============================================================
+// Open World — helper functions, components, and main view
+// ============================================================
+
+/** Deterministic PRNG for stable world geometry across renders */
+function seededRandom(seed: number) {
+  let s = seed >>> 0;
+  return () => {
+    s = Math.imul(48271, s) | 0;
+    return (s & 0x7fffffff) / 0x7fffffff;
+  };
+}
+
+/** Large physics + visual terrain split into three region color zones */
+function OpenWorldTerrain() {
+  return (
+    <>
+      {/* Physics plane + Pyrrhia base (green) */}
+      <RigidBody type="fixed" friction={1}>
+        <Plane args={[400, 400]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+          <meshStandardMaterial color="#3f8a4b" />
+        </Plane>
+      </RigidBody>
+      {/* Pantala visual overlay: x≥0, z≥30 → center (100,0,115), size 200×170 */}
+      <mesh position={[100, 0.02, 115]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <planeGeometry args={[200, 170]} />
+        <meshStandardMaterial color="#b88c3a" />
+      </mesh>
+      {/* Glaeryus visual overlay: x<0, z≥30 → center (-100,0,115), size 200×170 */}
+      <mesh position={[-100, 0.02, 115]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <planeGeometry args={[200, 170]} />
+        <meshStandardMaterial color="#3e4b52" />
+      </mesh>
+    </>
+  );
+}
+
+/** Wider Pyrrhia forest spread across the northern zone */
+function OpenWorldForest() {
+  const trees = useMemo(() => {
+    const rand = seededRandom(12345);
+    const result: { x: number; z: number; scale: number }[] = [];
+    for (let i = 0; i < 600 && result.length < 120; i++) {
+      const x = (rand() - 0.5) * 360;
+      const z = rand() * 220 - 200; // z: -200 to 20 (Pyrrhia zone)
+      if (Math.abs(x) < 22 && z > -35 && z < 20) continue;
+      result.push({ x, z, scale: 0.6 + rand() * 1.8 });
+    }
+    return result;
+  }, []);
+
+  const trunkGeo = useMemo(() => new THREE.CylinderGeometry(0.3, 0.4, 2), []);
+  const canopyGeo = useMemo(() => new THREE.ConeGeometry(1.5, 3, 8), []);
+  const trunkMat = useMemo(
+    () => new THREE.MeshStandardMaterial({ color: "#4a3018" }),
+    [],
+  );
+  const canopyMat = useMemo(
+    () => new THREE.MeshStandardMaterial({ color: "#2d5c2f" }),
+    [],
+  );
+  const trunkRef = useRef<THREE.InstancedMesh>(null);
+  const canopyRef = useRef<THREE.InstancedMesh>(null);
+
+  useEffect(() => {
+    const dummy = new THREE.Object3D();
+    trees.forEach(({ x, z, scale }, i) => {
+      dummy.position.set(x, scale, z);
+      dummy.scale.setScalar(scale);
+      dummy.updateMatrix();
+      trunkRef.current?.setMatrixAt(i, dummy.matrix);
+      dummy.position.set(x, scale * 3, z);
+      dummy.updateMatrix();
+      canopyRef.current?.setMatrixAt(i, dummy.matrix);
+    });
+    if (trunkRef.current) trunkRef.current.instanceMatrix.needsUpdate = true;
+    if (canopyRef.current) canopyRef.current.instanceMatrix.needsUpdate = true;
+  }, [trees]);
+
+  return (
+    <>
+      <instancedMesh
+        ref={trunkRef}
+        args={[trunkGeo, trunkMat, trees.length]}
+        castShadow
+        receiveShadow
+      />
+      <instancedMesh
+        ref={canopyRef}
+        args={[canopyGeo, canopyMat, trees.length]}
+        castShadow
+        receiveShadow
+      />
+    </>
+  );
+}
+
+/** Pantala: sandy rock spires in the southeastern sector */
+function PantalaDecor() {
+  const spires = useMemo(() => {
+    const rand = seededRandom(99999);
+    const result: { x: number; z: number; scale: number; rotY: number }[] = [];
+    for (let i = 0; i < 300 && result.length < 80; i++) {
+      const x = rand() * 185 + 8;   // x: 8–193 (Pantala, x ≥ 0)
+      const z = rand() * 165 + 35;  // z: 35–200
+      const scale = 0.7 + rand() * 2.0;
+      const rotY = rand() * Math.PI * 2;
+      result.push({ x, z, scale, rotY });
+    }
+    return result;
+  }, []);
+
+  const spireGeo = useMemo(
+    () => new THREE.CylinderGeometry(0.3, 0.95, 5, 6),
+    [],
+  );
+  const boulderGeo = useMemo(() => new THREE.DodecahedronGeometry(0.7, 0), []);
+  const spireMat = useMemo(
+    () =>
+      new THREE.MeshStandardMaterial({ color: "#8b5e3c", roughness: 0.9 }),
+    [],
+  );
+  const boulderMat = useMemo(
+    () =>
+      new THREE.MeshStandardMaterial({ color: "#a07050", roughness: 0.85 }),
+    [],
+  );
+  const spireRef = useRef<THREE.InstancedMesh>(null);
+  const boulderRef = useRef<THREE.InstancedMesh>(null);
+
+  useEffect(() => {
+    const dummy = new THREE.Object3D();
+    spires.forEach(({ x, z, scale, rotY }, i) => {
+      dummy.position.set(x, scale * 2.5, z);
+      dummy.scale.setScalar(scale);
+      dummy.rotation.set(0, rotY, 0);
+      dummy.updateMatrix();
+      spireRef.current?.setMatrixAt(i, dummy.matrix);
+      dummy.position.set(x + scale * 1.3, scale * 0.65, z);
+      dummy.scale.setScalar(scale * 0.65);
+      dummy.rotation.set(0, rotY + 1.1, 0);
+      dummy.updateMatrix();
+      boulderRef.current?.setMatrixAt(i, dummy.matrix);
+    });
+    if (spireRef.current) spireRef.current.instanceMatrix.needsUpdate = true;
+    if (boulderRef.current) boulderRef.current.instanceMatrix.needsUpdate = true;
+  }, [spires]);
+
+  return (
+    <>
+      <instancedMesh
+        ref={spireRef}
+        args={[spireGeo, spireMat, spires.length]}
+        castShadow
+        receiveShadow
+      />
+      <instancedMesh
+        ref={boulderRef}
+        args={[boulderGeo, boulderMat, spires.length]}
+        castShadow
+        receiveShadow
+      />
+    </>
+  );
+}
+
+/** Glaeryus: dark stone monoliths + cold crystal formations */
+function GlaeryusDecor() {
+  const monoliths = useMemo(() => {
+    const rand = seededRandom(55555);
+    const result: { x: number; z: number; h: number; w: number; rotY: number }[] =
+      [];
+    for (let i = 0; i < 200 && result.length < 60; i++) {
+      const x = -(rand() * 185 + 8);  // x: -8 to -193 (Glaeryus, x < 0)
+      const z = rand() * 165 + 35;    // z: 35–200
+      const h = 5 + rand() * 12;
+      const w = 0.9 + rand() * 1.5;
+      const rotY = rand() * Math.PI * 2;
+      result.push({ x, z, h, w, rotY });
+    }
+    return result;
+  }, []);
+
+  const crystals = useMemo(() => {
+    const rand = seededRandom(77777);
+    const result: { x: number; z: number; scale: number }[] = [];
+    for (let i = 0; i < 200 && result.length < 40; i++) {
+      const x = -(rand() * 180 + 10);
+      const z = rand() * 160 + 38;
+      const scale = 0.7 + rand() * 1.5;
+      result.push({ x, z, scale });
+    }
+    return result;
+  }, []);
+
+  const monolithGeo = useMemo(() => new THREE.BoxGeometry(1, 1, 1), []);
+  const crystalGeo = useMemo(() => new THREE.OctahedronGeometry(1, 0), []);
+  const monolithMat = useMemo(
+    () =>
+      new THREE.MeshStandardMaterial({
+        color: "#2e363e",
+        roughness: 0.8,
+        metalness: 0.15,
+      }),
+    [],
+  );
+  const crystalMat = useMemo(
+    () =>
+      new THREE.MeshStandardMaterial({
+        color: "#44bbff",
+        emissive: "#1e88e5",
+        emissiveIntensity: 0.55,
+        roughness: 0.1,
+        metalness: 0.7,
+        transparent: true,
+        opacity: 0.82,
+      }),
+    [],
+  );
+  const monolithRef = useRef<THREE.InstancedMesh>(null);
+  const crystalRef = useRef<THREE.InstancedMesh>(null);
+
+  useEffect(() => {
+    const dummy = new THREE.Object3D();
+    monoliths.forEach(({ x, z, h, w, rotY }, i) => {
+      dummy.position.set(x, h / 2, z);
+      dummy.scale.set(w, h, w * 0.65);
+      dummy.rotation.set(0, rotY, 0);
+      dummy.updateMatrix();
+      monolithRef.current?.setMatrixAt(i, dummy.matrix);
+    });
+    crystals.forEach(({ x, z, scale }, i) => {
+      dummy.position.set(x, scale * 1.2, z);
+      dummy.scale.setScalar(scale * 1.6);
+      dummy.rotation.set(0, 0, 0);
+      dummy.updateMatrix();
+      crystalRef.current?.setMatrixAt(i, dummy.matrix);
+    });
+    if (monolithRef.current)
+      monolithRef.current.instanceMatrix.needsUpdate = true;
+    if (crystalRef.current)
+      crystalRef.current.instanceMatrix.needsUpdate = true;
+  }, [monoliths, crystals]);
+
+  return (
+    <>
+      <instancedMesh
+        ref={monolithRef}
+        args={[monolithGeo, monolithMat, monoliths.length]}
+        castShadow
+        receiveShadow
+      />
+      <instancedMesh
+        ref={crystalRef}
+        args={[crystalGeo, crystalMat, crystals.length]}
+      />
+    </>
+  );
+}
+
+/** Discoverable world beacon — glows and fires onDiscovered when player flies through */
+function WorldBeacon({
+  region,
+  discovered,
+  onDiscovered,
+}: {
+  region: WorldRegion;
+  discovered: boolean;
+  onDiscovered: () => void;
+}) {
+  const ringRef = useRef<THREE.Mesh>(null);
+  const triggeredRef = useRef(false);
+  const pos = region.beaconPosition;
+
+  useFrame((_, delta) => {
+    if (ringRef.current) {
+      ringRef.current.rotation.y += delta * 0.5;
+      ringRef.current.rotation.z += delta * 0.28;
+    }
+    // Proximity detection — fires once
+    if (!triggeredRef.current) {
+      const dx = playerPos.x - pos[0];
+      const dy = playerPos.y - (pos[1] + 10);
+      const dz = playerPos.z - pos[2];
+      if (dx * dx + dy * dy + dz * dz < 81) {
+        triggeredRef.current = true;
+        onDiscovered();
+      }
+    }
+  });
+
+  return (
+    <group position={pos}>
+      {/* Base pillar */}
+      <mesh castShadow receiveShadow position={[0, 3, 0]}>
+        <cylinderGeometry args={[1.3, 1.9, 6, 8]} />
+        <meshStandardMaterial color="#334455" roughness={0.6} metalness={0.3} />
+      </mesh>
+      {/* Spinning beacon ring */}
+      <mesh ref={ringRef} position={[0, 10, 0]}>
+        <torusGeometry args={[3, 0.3, 8, 24]} />
+        <meshStandardMaterial
+          color={discovered ? region.beaconColor : "#333"}
+          emissive={discovered ? region.beaconColor : "#000"}
+          emissiveIntensity={discovered ? 1.8 : 0}
+          metalness={0.5}
+        />
+      </mesh>
+      {/* Wide guide halo */}
+      <mesh position={[0, 10, 0]}>
+        <torusGeometry args={[5.5, 0.1, 6, 36]} />
+        <meshStandardMaterial
+          color={region.color}
+          emissive={region.color}
+          emissiveIntensity={discovered ? 0.5 : 0.12}
+          transparent
+          opacity={0.55}
+        />
+      </mesh>
+      <pointLight
+        position={[0, 10, 0]}
+        color={discovered ? region.beaconColor : region.color}
+        intensity={discovered ? 12 : 3}
+        distance={discovered ? 50 : 28}
+      />
+    </group>
+  );
+}
+
+/** Runs inside Canvas; fires onRegionChange whenever the player crosses a region boundary */
+function RegionTracker({
+  onRegionChange,
+}: {
+  onRegionChange: (r: WorldRegion) => void;
+}) {
+  const lastIdRef = useRef<string>("");
+  useFrame(() => {
+    const r = getRegionAtPos(playerPos.x, playerPos.z);
+    if (r.id !== lastIdRef.current) {
+      lastIdRef.current = r.id;
+      onRegionChange(r);
+    }
+  });
+  return null;
+}
+
+/** Top-center HUD showing current region and beacon discovery count */
+function OpenWorldHUD({
+  region,
+  discoveredBeacons,
+}: {
+  region: WorldRegion;
+  discoveredBeacons: Set<string>;
+}) {
+  const discoveredCount = discoveredBeacons.size;
+  const allFound = discoveredCount === WORLD_REGIONS.length;
+  return (
+    <div className="ow-hud">
+      <div className="ow-region-label">CURRENT REGION</div>
+      <div className="ow-region-name" style={{ color: region.textColor }}>
+        {region.name.toUpperCase()}
+      </div>
+      <div className={`ow-beacons${allFound ? " complete" : ""}`}>
+        <span className="ow-beacon-pips">
+          {WORLD_REGIONS.map((r) => (
+            <span
+              key={r.id}
+              style={{
+                color: discoveredBeacons.has(r.id) ? "#ffd700" : "rgba(255,255,255,0.2)",
+              }}
+            >
+              {discoveredBeacons.has(r.id) ? "✦" : "○"}
+            </span>
+          ))}
+        </span>
+        {discoveredCount}/{WORLD_REGIONS.length} BEACONS
+      </div>
+    </div>
+  );
+}
+
+/** World map overlay rendered when player presses M or taps the MAP button */
+function WorldMapOverlay({
+  discoveredBeacons,
+  playerX,
+  playerZ,
+  onClose,
+}: {
+  discoveredBeacons: Set<string>;
+  playerX: number;
+  playerZ: number;
+  onClose: () => void;
+}) {
+  // World bounds: x/z each span -200 to 200 (400 units)
+  const toMapPct = (wx: number, wz: number) => ({
+    left: `${((wx + 200) / 400) * 100}%`,
+    top:  `${((wz + 200) / 400) * 100}%`,
+  });
+
+  const playerDot = toMapPct(playerX, playerZ);
+
+  return (
+    <div className="ow-map-overlay" onClick={onClose}>
+      <div className="ow-map-panel" onClick={(e) => e.stopPropagation()}>
+        <div className="ow-map-header">
+          <span className="ow-map-title-text">WORLD MAP</span>
+          <button type="button" className="ow-map-close" onClick={onClose}>
+            CLOSE [M]
+          </button>
+        </div>
+
+        <div className="ow-map-grid">
+          {/* Pyrrhia — north strip (z: -200 to 30 = 230/400 = 57.5% height from top) */}
+          <div
+            className="ow-map-region-block"
+            style={{
+              left: 0, top: 0, width: "100%", height: "57.5%",
+              background: "rgba(63, 138, 75, 0.28)",
+              borderBottom: "1px dashed rgba(76,175,80,0.25)",
+            }}
+          />
+          {/* Pantala — southeast (x: 0–200, z: 30–200) */}
+          <div
+            className="ow-map-region-block"
+            style={{
+              left: "50%", top: "57.5%", width: "50%", height: "42.5%",
+              background: "rgba(184, 140, 58, 0.28)",
+              borderLeft: "1px dashed rgba(255,167,38,0.22)",
+            }}
+          />
+          {/* Glaeryus — southwest (x: -200–0, z: 30–200) */}
+          <div
+            className="ow-map-region-block"
+            style={{
+              left: 0, top: "57.5%", width: "50%", height: "42.5%",
+              background: "rgba(62, 75, 82, 0.44)",
+            }}
+          />
+
+          {/* Region name labels */}
+          <span className="ow-map-region-label" style={{ left: "6%", top: "24%", color: "rgba(178,255,183,0.6)" }}>PYRRHIA</span>
+          <span className="ow-map-region-label" style={{ left: "55%", top: "65%", color: "rgba(255,224,160,0.6)" }}>PANTALA</span>
+          <span className="ow-map-region-label" style={{ left: "3%",  top: "72%", color: "rgba(176,208,224,0.6)" }}>GLAERYUS</span>
+
+          {/* Compass */}
+          <span className="ow-map-compass" style={{ top: 5, left: "50%", transform: "translateX(-50%)" }}>N</span>
+          <span className="ow-map-compass" style={{ bottom: 5, left: "50%", transform: "translateX(-50%)" }}>S</span>
+          <span className="ow-map-compass" style={{ top: "50%", left: 5, transform: "translateY(-50%)" }}>W</span>
+          <span className="ow-map-compass" style={{ top: "50%", right: 5, transform: "translateY(-50%)" }}>E</span>
+
+          {/* Beacon markers */}
+          {WORLD_REGIONS.map((r) => {
+            const p = toMapPct(r.beaconPosition[0], r.beaconPosition[2]);
+            const found = discoveredBeacons.has(r.id);
+            return (
+              <div
+                key={r.id}
+                className="ow-map-beacon-dot"
+                style={{
+                  left: p.left,
+                  top: p.top,
+                  color: found ? r.beaconColor : "rgba(255,255,255,0.18)",
+                  fontSize: found ? 15 : 11,
+                }}
+              >
+                {found ? "✦" : "○"}
+              </div>
+            );
+          })}
+
+          {/* Player position dot */}
+          <div
+            className="ow-map-player-dot"
+            style={{ left: playerDot.left, top: playerDot.top }}
+          />
+        </div>
+
+        <div className="ow-map-legend">
+          <div className="ow-map-legend-item">
+            <span style={{ color: "#ffd700" }}>✦</span> Beacon discovered
+          </div>
+          <div className="ow-map-legend-item">
+            <span style={{ color: "rgba(255,255,255,0.25)" }}>○</span> Undiscovered
+          </div>
+          <div className="ow-map-legend-item">
+            <span style={{ color: "#fff", fontSize: 8 }}>●</span> Your position
+          </div>
+          <div className="ow-map-legend-item right">
+            {discoveredBeacons.size} / {WORLD_REGIONS.length} beacons
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Full open-world free-flight experience across all three regions */
+function OpenWorldView({
+  dragon,
+  onSwap,
+  onBack,
+}: {
+  dragon: DragonType;
+  onSwap: (d: DragonType) => void;
+  onBack: () => void;
+}) {
+  const [currentRegion, setCurrentRegion] = useState<WorldRegion>(
+    WORLD_REGIONS[0],
+  );
+  const [discoveredBeacons, setDiscoveredBeacons] = useState<Set<string>>(
+    new Set(),
+  );
+  const [entryBanner, setEntryBanner] = useState<WorldRegion | null>(null);
+  const [showMap, setShowMap] = useState(false);
+  const [mapPlayerPos, setMapPlayerPos] = useState({ x: 0, z: 0 });
+  const [showSettings, setShowSettings] = useState(false);
+  const [controlScheme, setControlScheme] = useState(settings.scheme);
+  const bannerKeyRef = useRef(0);
+
+  const handleRegionChange = useCallback((r: WorldRegion) => {
+    setCurrentRegion(r);
+    bannerKeyRef.current += 1;
+    setEntryBanner(r);
+  }, []);
+
+  const handleBeaconDiscovered = useCallback((regionId: string) => {
+    setDiscoveredBeacons((prev) => {
+      if (prev.has(regionId)) return prev;
+      const next = new Set(prev);
+      next.add(regionId);
+      return next;
+    });
+  }, []);
+
+  const handleOpenMap = useCallback(() => {
+    setMapPlayerPos({ x: playerPos.x, z: playerPos.z });
+    setShowMap(true);
+  }, []);
+
+  // Keep map player dot live while open
+  useEffect(() => {
+    if (!showMap) return;
+    const id = setInterval(() => {
+      setMapPlayerPos({ x: playerPos.x, z: playerPos.z });
+    }, 300);
+    return () => clearInterval(id);
+  }, [showMap]);
+
+  // M key toggles map
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() === "m") {
+        setShowMap((prev) => {
+          if (!prev) setMapPlayerPos({ x: playerPos.x, z: playerPos.z });
+          return !prev;
+        });
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  return (
+    <div
+      tabIndex={0}
+      style={{
+        width: "100vw",
+        height: "100vh",
+        overflow: "hidden",
+        outline: "none",
+        touchAction: "none",
+      }}
+    >
+      <Canvas
+        shadows={{ type: THREE.PCFShadowMap }}
+        camera={{ position: [0, 5, 10], fov: 60 }}
+        dpr={[1, 1.5]}
+      >
+        <Sky sunPosition={[100, 20, 100]} />
+        <Environment preset="sunset" />
+        <ambientLight intensity={0.3} />
+        <directionalLight
+          castShadow
+          position={[50, 50, 20]}
+          intensity={1.2}
+          shadow-mapSize={[2048, 2048]}
+          shadow-camera-left={-80}
+          shadow-camera-right={80}
+          shadow-camera-top={80}
+          shadow-camera-bottom={-80}
+        />
+        <Physics debug={false}>
+          <OpenWorldTerrain />
+          <OpenWorldForest />
+          <PantalaDecor />
+          <GlaeryusDecor />
+          {WORLD_REGIONS.map((r) => (
+            <WorldBeacon
+              key={r.id}
+              region={r}
+              discovered={discoveredBeacons.has(r.id)}
+              onDiscovered={() => handleBeaconDiscovered(r.id)}
+            />
+          ))}
+          <BlockyDragon dragon={dragon} />
+          <Projectiles />
+        </Physics>
+        <RegionTracker onRegionChange={handleRegionChange} />
+      </Canvas>
+
+      {/* Camera pan overlay */}
+      <div
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          width: "100%",
+          height: "100%",
+          zIndex: 0,
+          touchAction: "none",
+        }}
+        onPointerDown={(e) => {
+          if (e.target instanceof Element)
+            e.target.setPointerCapture(e.pointerId);
+          pan.active = e.pointerId;
+          pan.lastX = e.clientX;
+          pan.lastY = e.clientY;
+        }}
+        onPointerMove={(e) => {
+          if (pan.active === e.pointerId) {
+            pan.yaw += (e.clientX - pan.lastX) * -0.005;
+            pan.pitch += (e.clientY - pan.lastY) * -0.005;
+            pan.pitch = Math.max(
+              -Math.PI / 3,
+              Math.min(Math.PI / 3, pan.pitch),
+            );
+            pan.lastX = e.clientX;
+            pan.lastY = e.clientY;
+          }
+        }}
+        onPointerUp={(e) => {
+          if (e.target instanceof Element)
+            e.target.releasePointerCapture(e.pointerId);
+          if (pan.active === e.pointerId) pan.active = 0;
+        }}
+        onPointerCancel={(e) => {
+          if (e.target instanceof Element)
+            e.target.releasePointerCapture(e.pointerId);
+          if (pan.active === e.pointerId) pan.active = 0;
+        }}
+      />
+
+      <OpenWorldHUD
+        region={currentRegion}
+        discoveredBeacons={discoveredBeacons}
+      />
+
+      {entryBanner && (
+        <div key={bannerKeyRef.current} className="ow-entry-banner">
+          <div
+            className="ow-entry-banner-name"
+            style={{ color: entryBanner.textColor }}
+          >
+            {entryBanner.name.toUpperCase()}
+          </div>
+          <div className="ow-entry-banner-lore">{entryBanner.lore}</div>
+        </div>
+      )}
+
+      {controlScheme === "buttons" ? (
+        <DPadControls joy={joy} abilityState={abilityState} />
+      ) : (
+        <TouchControls dragon={dragon} joy={joy} abilityState={abilityState} />
+      )}
+
+      <DragonSwitcher current={dragon} onSwap={onSwap} />
+
+      <button type="button" className="ow-back-btn" onClick={onBack}>
+        ← MODES
+      </button>
+
+      <button type="button" className="ow-map-btn" onClick={handleOpenMap}>
+        MAP [M]
+      </button>
+
+      <button
+        type="button"
+        className="hud-settings-btn"
+        title="Settings"
+        aria-label="Settings"
+        onClick={() => setShowSettings(true)}
+      >
+        <svg viewBox="0 0 20 20" fill="currentColor" width="20" height="20">
+          <path d="M11.5 2.1l.9 2a6.1 6.1 0 011.4.8l2-.6a8 8 0 011.4 2.4l-1.2 1.7c.1.5.1 1 0 1.6l1.2 1.7a8 8 0 01-1.4 2.4l-2-.6c-.4.3-.9.6-1.4.8l-.9 2a8 8 0 01-3 0l-.9-2a6.1 6.1 0 01-1.4-.8l-2 .6a8 8 0 01-1.4-2.4l1.2-1.7a6 6 0 010-1.6L2.8 7.5a8 8 0 011.4-2.4l2 .6c.4-.3.9-.6 1.4-.8l.9-2a8 8 0 013 0zM10 7.5a2.5 2.5 0 100 5 2.5 2.5 0 000-5z" />
+        </svg>
+      </button>
+
+      {showSettings && (
+        <SettingsPanel
+          onClose={() => {
+            setShowSettings(false);
+            setControlScheme(settings.scheme);
+          }}
+        />
+      )}
+
+      {showMap && (
+        <WorldMapOverlay
+          discoveredBeacons={discoveredBeacons}
+          playerX={mapPlayerPos.x}
+          playerZ={mapPlayerPos.z}
+          onClose={() => setShowMap(false)}
+        />
+      )}
+    </div>
+  );
+}
+
 function GameWorld({
   dragon,
   mission,
@@ -1731,8 +2453,29 @@ export default function App() {
       <DragonSelect
         onSelect={(d) => {
           setSelectedDragon(d);
-          setScreen("mission_select");
+          setScreen("mode_select");
         }}
+      />
+    );
+  }
+
+  if (screen === "mode_select") {
+    return (
+      <ModeSelect
+        dragon={selectedDragon}
+        onMissions={() => setScreen("mission_select")}
+        onOpenWorld={() => setScreen("open_world")}
+        onBack={() => setScreen("dragon_select")}
+      />
+    );
+  }
+
+  if (screen === "open_world") {
+    return (
+      <OpenWorldView
+        dragon={selectedDragon}
+        onSwap={setSelectedDragon}
+        onBack={() => setScreen("mode_select")}
       />
     );
   }
@@ -1746,7 +2489,7 @@ export default function App() {
           setScreen("mission_brief");
         }}
         onBack={() => {
-          setScreen("dragon_select");
+          setScreen("mode_select");
         }}
       />
     );

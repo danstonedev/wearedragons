@@ -1,0 +1,366 @@
+/* ============================================================
+   Open World HUD & Map — wearedragons
+   ============================================================ */
+
+/* ---- Region Label HUD (top-center) ---- */
+
+.ow-hud {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  pointer-events: none;
+  z-index: 10;
+  text-align: center;
+}
+
+.ow-region-label {
+  font-family: "Space Grotesk", "Inter", sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.ow-region-name {
+  font-family: "Space Grotesk", "Inter", sans-serif;
+  font-size: 20px;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.8);
+  transition: color 0.5s ease;
+}
+
+.ow-beacons {
+  font-family: "Space Grotesk", "Inter", sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: rgba(255, 255, 255, 0.5);
+  margin-top: 3px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ow-beacons.complete {
+  color: #ffd700;
+}
+
+.ow-beacon-pips {
+  display: flex;
+  gap: 5px;
+}
+
+/* ---- Region Entry Banner (center-screen fade) ---- */
+
+.ow-entry-banner {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  pointer-events: none;
+  z-index: 20;
+  animation: ow-banner-fade 2.8s ease forwards;
+}
+
+@keyframes ow-banner-fade {
+  0%   { opacity: 0; transform: translate(-50%, -54%); }
+  18%  { opacity: 1; transform: translate(-50%, -50%); }
+  72%  { opacity: 1; transform: translate(-50%, -50%); }
+  100% { opacity: 0; transform: translate(-50%, -46%); }
+}
+
+.ow-entry-banner-name {
+  font-family: "Space Grotesk", "Inter", sans-serif;
+  font-size: 48px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  text-shadow: 0 2px 24px rgba(0, 0, 0, 0.9);
+}
+
+.ow-entry-banner-lore {
+  font-family: "Space Grotesk", "Inter", sans-serif;
+  font-size: 13px;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.7);
+  max-width: 400px;
+  margin: 8px auto 0;
+  line-height: 1.55;
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.95);
+}
+
+/* ---- Nav buttons (bottom-left) ---- */
+
+.ow-back-btn,
+.ow-map-btn {
+  position: absolute;
+  bottom: 24px;
+  z-index: 15;
+  background: rgba(10, 12, 16, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.55);
+  font-family: "Space Grotesk", "Inter", sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  padding: 8px 14px;
+  cursor: pointer;
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  transition: color 0.15s, border-color 0.15s;
+  text-transform: uppercase;
+}
+
+.ow-back-btn {
+  left: 24px;
+}
+
+.ow-map-btn {
+  left: 142px;
+}
+
+.ow-back-btn:hover,
+.ow-map-btn:hover {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.32);
+}
+
+/* ---- World Map Overlay ---- */
+
+.ow-map-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(6, 8, 12, 0.86);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  -webkit-backdrop-filter: blur(5px);
+  backdrop-filter: blur(5px);
+}
+
+.ow-map-panel {
+  background: #0c0f14;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 12px;
+  padding: 24px 28px 20px;
+  width: 520px;
+  max-width: 90vw;
+  box-shadow: 0 32px 80px rgba(0, 0, 0, 0.7);
+}
+
+.ow-map-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.ow-map-title-text {
+  font-family: "Space Grotesk", "Inter", sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  color: rgba(255, 255, 255, 0.4);
+  text-transform: uppercase;
+}
+
+.ow-map-close {
+  background: none;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  color: rgba(255, 255, 255, 0.4);
+  font-family: "Space Grotesk", "Inter", sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  padding: 3px 9px;
+  cursor: pointer;
+  text-transform: uppercase;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.ow-map-close:hover {
+  border-color: rgba(255, 255, 255, 0.3);
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.ow-map-grid {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: #080a0d;
+}
+
+.ow-map-region-block {
+  position: absolute;
+}
+
+.ow-map-region-label {
+  position: absolute;
+  font-family: "Space Grotesk", "Inter", sans-serif;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+
+.ow-map-compass {
+  position: absolute;
+  font-family: "Space Grotesk", "Inter", sans-serif;
+  font-size: 8px;
+  color: rgba(255, 255, 255, 0.3);
+  letter-spacing: 0.05em;
+  pointer-events: none;
+}
+
+.ow-map-beacon-dot {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  font-size: 14px;
+  line-height: 1;
+  text-shadow: 0 0 10px currentColor;
+  transition: color 0.25s;
+  pointer-events: none;
+}
+
+.ow-map-player-dot {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  background: #ffffff;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.25), 0 0 12px rgba(255, 255, 255, 0.5);
+  transition: left 0.25s, top 0.25s;
+  pointer-events: none;
+}
+
+.ow-map-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 12px;
+  font-family: "Space Grotesk", "Inter", sans-serif;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.35);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.ow-map-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.ow-map-legend-item.right {
+  margin-left: auto;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+/* ---- Mode Select Screen ---- */
+
+.mode-select-shell {
+  width: 100%;
+  max-width: 660px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.mode-select-header {
+  text-align: center;
+}
+
+.mode-select-title {
+  font-family: "Space Grotesk", "Inter", sans-serif;
+  font-size: 26px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #fff7ed;
+  margin: 6px 0 0;
+}
+
+.mode-select-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.mode-card {
+  background: rgba(16, 18, 24, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 10px;
+  padding: 26px 20px;
+  cursor: pointer;
+  text-align: left;
+  color: #fff7ed;
+  font-family: "Space Grotesk", "Inter", sans-serif;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: border-color 0.2s, background 0.2s, transform 0.15s;
+}
+
+.mode-card:hover {
+  border-color: var(--mode-accent, rgba(255, 255, 255, 0.3));
+  background: rgba(24, 26, 34, 0.92);
+  transform: translateY(-2px);
+}
+
+.mode-card-icon {
+  font-size: 26px;
+  line-height: 1;
+  color: var(--mode-accent, #888);
+}
+
+.mode-card-label {
+  font-size: 15px;
+  font-weight: 900;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--mode-accent, #fff7ed);
+}
+
+.mode-card-desc {
+  font-size: 12px;
+  line-height: 1.6;
+  color: rgba(255, 247, 237, 0.55);
+  font-weight: 400;
+}
+
+.mode-card-tag {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  color: var(--mode-accent, rgba(255, 255, 255, 0.4));
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+
+.mode-select-actions {
+  display: flex;
+  justify-content: center;
+}
+
+@media (max-width: 560px) {
+  .mode-select-cards {
+    grid-template-columns: 1fr;
+  }
+}

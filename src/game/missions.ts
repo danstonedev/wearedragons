@@ -2,11 +2,13 @@
 
 export type AppScreen =
   | "dragon_select"
+  | "mode_select"
   | "mission_select"
   | "mission_brief"
   | "in_mission"
   | "mission_success"
-  | "mission_fail";
+  | "mission_fail"
+  | "open_world";
 
 export type MissionObjectiveType =
   | "destroy_targets"
