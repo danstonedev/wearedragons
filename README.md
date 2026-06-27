@@ -1,3 +1,5 @@
+> ⚠️ **Archived.** Dormant proof-of-concept prototype ("Tier 0: Proof of Life"), no longer maintained as of 2026-06-27; no consumers or successor. Retained read-only for history. Evidence: [devpt/LEGACY-AUDIT.md](https://github.com/danstonedev/devpt/blob/claude/devpt-portfolio-analysis-whhyrm/LEGACY-AUDIT.md).
+
 # We Are Dragons
 
 A PlayCanvas React + TypeScript WebGL vertical slice.
