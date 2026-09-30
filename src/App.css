@@ -870,3 +870,7 @@ html:not([data-device="desktop"]) .flight-ability { bottom: auto; top: 66px; }
 .mission-record b { color: #83e3ed; font-size: 11px; }
 .mission-select-card.campaign-next { border-color: #66d4df99; box-shadow: 0 0 20px #42b7cb12; }
 .campaign-continue { margin-top: 14px; width: 100%; }
+.flight-sound { position: absolute; left: 18px; top: 106px; z-index: 12; padding: 8px 12px; color: #d6eef0; background: #0c1b25dd; border: 1px solid #80b1bd55; border-radius: 8px; cursor: pointer; font: 11px system-ui, sans-serif; }
+.flight-feel-controls { position: absolute; right: 20px; top: 112px; z-index: 12; display: flex; gap: 8px; }
+.flight-feel-controls button { touch-action: none; padding: 12px; border: 1px solid #a9d4df55; border-radius: 8px; background: #0c1b25dd; color: #d6eef0; font: bold 11px system-ui, sans-serif; cursor: pointer; }
+.flight-feel-controls button:active { background: #285a68; }

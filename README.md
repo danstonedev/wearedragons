@@ -55,6 +55,12 @@ Flight now accelerates and brakes smoothly, with capsule sweeps against physical
 
 ## Development guide
 
+### Flight feel
+
+Powered flight now carries momentum through turns. Agile dragons redirect faster; heavier dragons take wider approaches. Diving increases forward speed, while climbing reduces it. Hold **G** to glide or **B** to airbrake; touch players have matching hold buttons. Quest uses **right grip for glide** and **left grip for brake**. Glide gradually loses speed and altitude, with gentle steering and existing collision/ground clearance protection. Desktop/touch cameras widen their view slightly at speed; headset view and the twelve-unit horizontal speed cap remain steady.
+
+Press **Enable Sound** before entering VR or during browser play for synthesized wind, wingbeat whooshes, shots, and impacts. Sound starts muted, follows flight speed, quiets wingbeats during glide, and fades during pause. This is a first sensory pass using generated audio, not a finished recorded sound set. Hardware listening and flight-comfort tests remain necessary.
+
 ### Guardian log and replay goals
 
 Mission victories now save best stars, fastest time, highest HP, clear count, and stars for the dragon that finishes the mission. The Guardian Log recommends the first unfinished chapter, and the result screen offers a direct continuation plus the three-star target. Dragon mastery totals best stars across the four missions; replays cannot inflate it. Saves stay on the current browser/device and do not sync between a computer and headset. If storage is blocked, play continues with session progress.

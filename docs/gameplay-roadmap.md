@@ -55,20 +55,28 @@ Choose a highlighted unfinished mission, improve a two-star result, or build mas
 - Allow recovery by crossing from either side. Flying near a ring without crossing its plane does not count.
 - Preserve the eight-gate route, ninety-second limit, and existing star goals until playtests justify retuning.
 
+## Flight feel pass delivered
+
+Tutorial production is deferred while flight and sensory quality improve. Powered turns retain momentum with agility-dependent response; dives gain speed and climbs trade speed for altitude. Holding glide preserves momentum, descends gently, and allows slow redirection. Airbrake overrides glide and powered thrust horizontally for recovery. Ground clearance and collision sweeps remain authoritative. Quest horizontal motion stays capped at twelve units per second.
+
+Visual banking now depends on movement speed and is suppressed on the ground. Glide reduces flap playback speed. Desktop/touch view widens from 60 to at most 67 degrees with speed; headset camera tracking is unchanged. Synthesized wind, wing whooshes, launch sounds, and impacts can be enabled with a user gesture. Sound defaults off and responds to pause. This is prototype audio, not authored spatial sound or a new glide animation.
+
+Test a heavy and an agile dragon on the same route; compare powered turns, dives, climbs, gliding, braking, slope approaches, and boost/special recovery. Listen at normal headset volume and verify no sound persists after leaving play. Measure Quest comfort and performance before tuning the speed cap or adding camera effects.
+
 ## Prioritized production backlog
 
 | Priority | Upgrade | Player benefit | Completion evidence |
 | --- | --- | --- | --- |
-| 1 | First-flight tutorial with contextual prompts and practice targets | Learn controls and recover without reading a wall of text | A new player flies, brakes, fires, and uses a special unaided within three minutes on desktop and Quest |
-| 2 | Flight feel: glide, banking, dive energy, landing response | Flying is enjoyable between encounters | Five-minute route feels controllable; tuning tested with fast/heavy/agile dragons; camera comfort retained |
-| 3 | Combat encounters: cover, scout variants, readable shot lanes | Tactical movement instead of circling stationary targets | Two viable approaches per encounter; each threat has a visible tell and counterplay |
+| Later | First-flight tutorial with contextual prompts and practice targets | Learn controls and recover without reading a wall of text | A new player flies, brakes, fires, and uses a special unaided within three minutes on desktop and Quest |
+| 1 | Flight feel: glide, banking, dive energy, landing response | Flying is enjoyable between encounters | Five-minute route feels controllable; tuning tested with fast/heavy/agile dragons; camera comfort retained |
+| 2 | Combat encounters: cover, scout variants, readable shot lanes | Tactical movement instead of circling stationary targets | Two viable approaches per encounter; each threat has a visible tell and counterplay |
 | 4 | Beacon restoration effects and saved exploration discoveries | Success changes the world | Return visits show restored landmarks; discovery remains after reload |
-| 5 | Hero environment and creature art | A coherent, convincing place and dragon | One authored valley and hero dragon inspected at player-camera distance, in motion, on desktop and headset |
+| 3 | Hero environment and creature art | A coherent, convincing place and dragon | One authored valley and hero dragon inspected at player-camera distance, in motion, on desktop and headset |
 | 6 | Pantala rescue mission | A new verb and regional purpose | Locate survivor, clear threat, escort to safety; legible failure/retry conditions |
 | 7 | Regional finale with elite aerial enemy | A satisfying campaign culmination | Multi-phase encounter with clear tells, recovery windows, and dragon-role viability |
 | 8 | Cosmetic mastery rewards and optional route modifiers | Long-term personal goals | Earned rewards displayed on selection and in play; no required damage grind |
 
-Priorities 2–5 can iterate together after tutorial feedback. A feature is not complete merely because it compiles.
+Priorities 1–4 can iterate together after flight playtests. A feature is not complete merely because it compiles.
 
 ## Flight and physics design
 

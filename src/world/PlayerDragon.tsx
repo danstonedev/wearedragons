@@ -44,7 +44,7 @@ export default function PlayerDragon({ dragon }: { dragon: DragonType }) {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLElement && (e.target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName))) return;
       const key = e.key.toLowerCase();
-      if (!["w", "a", "s", "d", "arrowup", "arrowdown", "arrowleft", "arrowright", " ", "shift", "f", "q"].includes(key)) return;
+      if (!["w", "a", "s", "d", "arrowup", "arrowdown", "arrowleft", "arrowright", " ", "shift", "f", "q", "g", "b"].includes(key)) return;
       e.preventDefault();
       if (gameSession.paused) return;
       keys[key] = true;
@@ -227,15 +227,18 @@ export default function PlayerDragon({ dragon }: { dragon: DragonType }) {
     const airborneSpeed = inVR ? Math.min(12, requestedSpeed) : requestedSpeed;
     const maxSpeed = grounded && dy <= 0 && ability.type !== "updraft" ? Math.min(6 * s.speed, airborneSpeed) : airborneSpeed;
     if (boostRef.current > 0) dz = Math.min(dz, -0.75);
+    const braking = inVR ? xrInput.brake : keys.b || joy.brake;
+    const gliding = (inVR ? xrInput.glide : keys.g || joy.glide) && !grounded && !braking && !ability.type;
     visualGroupRef.current.rotation.y -= dx * 2.5 * s.agility * settings.turnSensitivity * delta;
     playerStatus.heading = visualGroupRef.current.rotation.y;
-    const targetBank = rollRef.current > 0 ? (rollRef.current / Math.max(spec.duration, 0.1)) * Math.PI * 4 : -dx * Math.PI / 6;
+    const bankStrength = grounded ? 0 : (0.35 + 0.65 * Math.min(1, Math.hypot(actualVelocity.current.x, actualVelocity.current.z) / Math.max(1, baseMaxSpeed))) * (gliding ? 0.6 : 1);
+    const targetBank = rollRef.current > 0 ? (rollRef.current / Math.max(spec.duration, 0.1)) * Math.PI * 4 : -dx * Math.PI / 6 * bankStrength;
     visualGroupRef.current.rotation.z = rollRef.current > 0 ? targetBank : damp(visualGroupRef.current.rotation.z, targetBank, 10, delta);
     const override = ability.type === "ground_slam" ? -60 : ability.type === "updraft" ? 40 * Math.min(1, ability.remaining / 0.25) : undefined;
-    const velocity = flightVelocity(actualVelocity.current, { forward: dz, climb: dy }, playerStatus.heading, maxSpeed, settings.climbSensitivity, altitudeAboveGround, delta, override);
+    const velocity = flightVelocity(actualVelocity.current, { forward: dz, climb: dy }, playerStatus.heading, maxSpeed, settings.climbSensitivity, altitudeAboveGround, delta, override, { glide: Boolean(gliding), brake: Boolean(braking), agility: s.agility, grounded, speedCeiling: inVR ? 12 : undefined });
     const tvx = velocity.x, fvy = velocity.y, tvz = velocity.z;
     Object.assign(desiredVelocity.current, velocity);
-    playerStatus.flightMode = flightMode(grounded, altitudeAboveGround, actualVelocity.current);
+    playerStatus.flightMode = gliding ? "glide" : braking ? "braking" : flightMode(grounded, altitudeAboveGround, actualVelocity.current);
     playerStatus.speed = Math.hypot(actualVelocity.current.x, actualVelocity.current.y, actualVelocity.current.z);
 
     // Aim feedback and emitted shots share the same muzzle and central direction.
@@ -275,6 +278,8 @@ export default function PlayerDragon({ dragon }: { dragon: DragonType }) {
       targetTimeScaleRef.current = 0.15;
     } else if (grounded) {
       targetTimeScaleRef.current = 0.4 + speedRatio * 0.4;
+    } else if (gliding) {
+      targetTimeScaleRef.current = 0.12;
     } else if (isBoosting) {
       targetTimeScaleRef.current = 2.0;
     } else {
@@ -374,6 +379,12 @@ export default function PlayerDragon({ dragon }: { dragon: DragonType }) {
     }
 
     if (cameraRef.current && !inVR) {
+      const targetFov = 60 + Math.min(1, playerStatus.speed / Math.max(1, baseMaxSpeed)) * 7;
+      const fov = damp(cameraRef.current.fov, targetFov, 2, delta);
+      if (Math.abs(fov - cameraRef.current.fov) > 0.01) {
+        cameraRef.current.fov = fov;
+        cameraRef.current.updateProjectionMatrix();
+      }
       const pos = rbRef.current.translation();
       _camVec.set(pos.x, pos.y, pos.z);
       const isMoving = Math.abs(dx) > 0.01 || Math.abs(dz) > 0.01;
