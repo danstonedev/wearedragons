@@ -12,13 +12,15 @@ AI coding can accelerate implementation, refactoring, test coverage, profiling t
 - Work included source review of the player, controls, materials, animation, mission reducers, tower combat, projectile simulation, world assembly, castle destruction, settings, packaging, and deployment configuration.
 - The baseline production build succeeded. Baseline lint reported 33 errors and one warning, and the repository had no automated game tests.
 - The cloud browser could navigate the deployed selection and mission menus, but its GPU/WebGL was disabled. Local preview URLs were also blocked by that browser. **Rendered flight, the new atmosphere, real controller sessions, frame rates, and VR comfort were not validated.**
-- The current branch now passes 34 automated tests, lint, and a production build. Tests include real Rapier WASM collisions and parsing/animating the actual dragon GLB. They do not substitute for an end-to-end rendered playtest.
+- The current branch now passes 39 automated tests, lint, and a production build. Tests include real Rapier WASM collisions and parsing/animating the actual dragon GLB. They do not substitute for an end-to-end rendered playtest.
 
 ## Second-pass implementation update
 
 The review branch now adds collision-aware flight, flight-mode/speed feedback, world-space aim guidance, tower health bars, bounded instanced impact/destruction bursts, and desktop hit confirmations. Muzzle origins are clipped to the player side of walls so the visual dragon neck cannot let shots spawn behind blocking geometry. Aim guidance indicates the initial shot direction including inherited flight velocity; it is not a ballistic prediction for gravity/spread attacks.
 
-Rapier is now an explicit dependency pinned to `0.19.2`, matching React Three Rapier. Earlier test resolution picked up an older `0.12.0` package from Three's type dependencies. A regression test checks that the test suite and runtime resolve the same package, and the existing projectile checks were rerun on the correct engine. New real-world tests cover thin walls across 30/60/72/120 Hz, wall sliding, corner escape, floor landing/takeoff, ceilings, sensor/friendly-shot filtering, and blocked/unblocked muzzle origins. The suite has 34 tests. Rendered and headset validation remain outstanding.
+Rapier is now an explicit dependency pinned to `0.19.2`, matching React Three Rapier. Earlier test resolution picked up an older `0.12.0` package from Three's type dependencies. A regression test checks that the test suite and runtime resolve the same package, and the existing projectile checks were rerun on the correct engine. New real-world tests cover thin walls across 30/60/72/120 Hz, wall sliding, corner escape, floor landing/takeoff, ceilings, sensor/friendly-shot filtering, blocked/unblocked muzzle origins, and a moving flying-enemy collider. The suite has 39 tests. Rendered and headset validation remain outstanding.
+
+Beacon Ridge now has a single Raider Scout with patrol/intercept/windup/evade/retreat phases, a 0.75-second orange firing tell, world-obstructed sight, cloak response, health, and an airborne destruction burst. It reuses the dragon GLB with an owned recolored material set and uses the same shot and hit-feedback paths as towers. Killing it is optional; tower and beacon progression is unchanged. AI tests cover concealment, fire timing, retreat, and 30/60/120 Hz movement. The model's scale, firing cue, line-of-sight geometry, balance, and motion still need visual and device playtesting.
 
 ## What already exists
 
@@ -27,7 +29,7 @@ The README's PlayCanvas description and the old roadmap's claim that there are n
 | Existing system | Actual scope |
 | --- | --- |
 | Dragon roster | 15 data-defined dragons across three tribes, with speed, agility, firepower, armor, attacks, specials, and material effects |
-| Beacon Ridge | Three fixed tower targets followed by a beacon objective |
+| Beacon Ridge | Three fixed tower targets, one optional flying Raider Scout, then a beacon objective |
 | Sky Circuit | Eight sequential rings; 90-second limit |
 | Ridge Defense | Three waves of two, three, then four towers |
 | Jade Citadel Strike | 64 dynamic castle blocks; 40 displacements required within 120 seconds |
@@ -35,7 +37,7 @@ The README's PlayCanvas description and the old roadmap's claim that there are n
 | Dragon asset | One 318,032-byte GLB reused by the roster: two meshes, 1,344 indexed triangles, five materials, no textures, and five animation clips |
 | Presentation | A styled bestiary, briefings, objective and health HUDs, results, and touch controls |
 
-The existing roster and menu art direction are useful foundations. However, all dragons share the same silhouette, the regions mostly differ by color and props, and the core enemies are stationary towers. There is no saved campaign progression or developed audio loop. These constrain variety and perceived production quality more than polygon count alone.
+The existing roster and menu art direction are useful foundations. However, all dragons share the same silhouette, the regions mostly differ by color and props, and only Beacon Ridge has a flying enemy so far. There is no saved campaign progression or developed audio loop. These constrain variety and perceived production quality more than polygon count alone.
 
 ## Code-confirmed problems and first-pass changes
 
@@ -71,7 +73,7 @@ Completion criteria: a five-minute route feels controllable at 30/60/120 Hz desk
 
 ### 2. Combat with readable choices
 
-Add aim guidance, a reticle or predicted impact marker, enemy health cues, hit sparks, a clear destruction event, damage direction, sound, and stronger objective guidance. Balance range, rate, projectile speed, and damage rather than relying on firing rate alone. Introduce three eventual enemy roles: a telegraphed turret, an intercepting flyer, and a heavy defender. Start with the flyer in Beacon Ridge.
+Add aim guidance, a reticle or predicted impact marker, enemy health cues, hit sparks, a clear destruction event, damage direction, sound, and stronger objective guidance. Balance range, rate, projectile speed, and damage rather than relying on firing rate alone. Introduce three eventual enemy roles: a telegraphed turret, an intercepting flyer, and a heavy defender. The first flyer is in Beacon Ridge; tune its attacks and build a second role after playtesting.
 
 Use deterministic AI states such as patrol, detect, approach, attack, evade, and retreat, with cooldowns and bounded steering. AI coding assistance is useful for building these systems; a networked language model in the frame loop is unnecessary for this combat.
 
@@ -140,6 +142,6 @@ Avoid a giant open-world rewrite, multiplayer, procedural quest generation, and 
 
 ## Automated validation in this branch
 
-`npm test` runs 34 tests covering concurrent mission progress, duplicate events, sequential objectives, survival waves, timeout/terminal state, retries, healing and invalid damage, stars, refresh-independent damping, acceleration/braking, ground clearance, ability persistence, swept projectile hits, corrupt settings, controller mappings/deadzones/press edges, input reset, real Rapier CCD at multiple speeds/timesteps, overlapping multi-shot collision groups, GLB material ownership, and independent bone animation.
+`npm test` runs 39 tests covering concurrent mission progress, duplicate events, sequential objectives, survival waves, timeout/terminal state, retries, healing and invalid damage, stars, refresh-independent damping, acceleration/braking, ground clearance, ability persistence, swept projectile hits, corrupt settings, controller mappings/deadzones/press edges, input reset, real Rapier CCD at multiple speeds/timesteps, overlapping multi-shot collision groups, moving-scout collision, Raider Scout states/sight/timing, GLB material ownership, and independent bone animation.
 
 `npm run lint` passes. The immutability rule is scoped off only for R3F components that mutate owned Three/Rapier objects; the remaining hooks, dependency, purity, and state rules remain enabled. `npm run build` passes TypeScript and produces the deployable Vite bundle. No new rendered-browser or headset test has been claimed.

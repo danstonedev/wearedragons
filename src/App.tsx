@@ -7,6 +7,7 @@ import type { Dispatch, SetStateAction } from "react";
 import PlayerDragon from "./world/PlayerDragon";
 import Projectiles, { EnemyProjectiles } from "./world/Projectiles";
 import Watchtower from "./world/Watchtower";
+import FlyingRaider from "./world/FlyingRaider";
 import CombatFeedback from "./world/CombatFeedback";
 import { joy, pan, playerPos, playerStatus, abilityState, gameSession, missionEmitter } from "./game/runtime";
 import { useRef, useEffect, useMemo, useState, useCallback } from "react";
@@ -1552,6 +1553,7 @@ function GameWorld({
               {TOWER_POSITIONS.map((pos, i) => (
                 <Watchtower key={i} position={pos} id={`tower_${i}`} />
               ))}
+              <FlyingRaider />
               <BeaconObj position={BEACON_POSITION} active={beaconActive} />
             </>
           )}

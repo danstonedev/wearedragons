@@ -64,7 +64,7 @@ export const MISSIONS: MissionDefinition[] = [
     name: "Beacon Ridge",
     description: "Destroy the raider watchtowers and reactivate the sky-beacon.",
     briefing:
-      "Raiders have seized the ridge beacon and built watchtowers to guard it. Destroy all three towers, then fly through the beacon to restore the signal. Watch for return fire.",
+      "Raiders have seized the ridge beacon and built watchtowers to guard it. Destroy all three towers, then fly through the beacon to restore the signal. A flying scout patrols above the ridge: watch for its orange firing tell, dodge its shot, or drive it off.",
     region: "pyrrhia",
     type: "fortress_raid",
     objectives: [

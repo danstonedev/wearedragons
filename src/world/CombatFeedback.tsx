@@ -3,6 +3,7 @@ import { useFrame } from "@react-three/fiber";
 import { useRapier } from "@react-three/rapier";
 import * as THREE from "three";
 import { aim, gameSession, missionEmitter, combatFeedback } from "../game/runtime";
+import { AIM_TARGETS } from "../game/aim";
 
 interface Burst { position: THREE.Vector3; color: THREE.Color; age: number; large: boolean }
 const MAX_BURSTS = 16;
@@ -31,7 +32,7 @@ export default function CombatFeedback() {
     if (!reticle.current || !particles.current || gameSession.paused) return;
     scratch.ray.origin = aim.origin;
     scratch.ray.dir = aim.direction;
-    const hit = world.castRay(scratch.ray, 100, true, rapier.QueryFilterFlags.EXCLUDE_SENSORS, (1 << 16) | 1);
+    const hit = world.castRay(scratch.ray, 100, true, rapier.QueryFilterFlags.EXCLUDE_SENSORS, AIM_TARGETS);
     const distance = hit?.timeOfImpact ?? 60;
     reticle.current.position.set(aim.origin.x + aim.direction.x * distance, aim.origin.y + aim.direction.y * distance, aim.origin.z + aim.direction.z * distance);
     reticle.current.lookAt(state.camera.getWorldPosition(scratch.eye));

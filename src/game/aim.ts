@@ -2,6 +2,8 @@ import type { World, Ray } from "@dimforge/rapier3d-compat";
 import type { Vector3Like } from "./flight";
 
 export const WORLD_ONLY = (1 << 16) | 1;
+// Query as a player shot (group 1 against group 0): sees solid targets, not friendly shots or the player.
+export const AIM_TARGETS = (2 << 16) | 1;
 
 /** Keep the projectile origin on the player's side of blocking geometry. */
 export function safeMuzzle(world: World, ray: Ray, from: Vector3Like, desired: Vector3Like, excludeSensors: number) {
