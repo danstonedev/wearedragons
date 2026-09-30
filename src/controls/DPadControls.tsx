@@ -1,3 +1,4 @@
+import { updateTouchInput } from "./inputState";
 import { useRef, useCallback, useEffect } from "react";
 import "./DPadControls.css";
 
@@ -39,7 +40,7 @@ function ArrowBtn({
   const handleUp = useCallback(
     (e: React.PointerEvent) => {
       if (e.target instanceof Element)
-        e.target.releasePointerCapture(e.pointerId);
+        if (e.target.hasPointerCapture(e.pointerId)) e.target.releasePointerCapture(e.pointerId);
       onUp();
     },
     [onUp],
@@ -75,18 +76,18 @@ function DPad({ joy }: { joy: JoyState }) {
 
   const sync = useCallback(() => {
     const h = held.current;
-    joy.left.x = (h.right ? 1 : 0) - (h.left ? 1 : 0);
-    joy.left.y = (h.up ? 1 : 0) - (h.down ? 1 : 0);
+    updateTouchInput(joy, { turn: (h.right ? 1 : 0) - (h.left ? 1 : 0) });
+    updateTouchInput(joy, { climb: (h.up ? 1 : 0) - (h.down ? 1 : 0) });
     // Auto-throttle: cruise forward whenever any direction is pressed
-    joy.throttle = h.up || h.down || h.left || h.right ? 0.75 : 0;
+    updateTouchInput(joy, { throttle: h.up || h.down || h.left || h.right ? 0.75 : 0 });
   }, [joy]);
 
   // Clear inputs on unmount
   useEffect(() => {
     return () => {
-      joy.left.x = 0;
-      joy.left.y = 0;
-      joy.throttle = 0;
+      updateTouchInput(joy, { turn: 0 });
+      updateTouchInput(joy, { climb: 0 });
+      updateTouchInput(joy, { throttle: 0 });
     };
   }, [joy]);
 
@@ -152,15 +153,15 @@ function DPadFireButton({ joy }: { joy: JoyState }) {
   const handleDown = useCallback(
     (e: React.PointerEvent) => {
       if (e.target instanceof Element) e.target.setPointerCapture(e.pointerId);
-      joy.fire = true;
+      updateTouchInput(joy, { fire: true });
     },
     [joy],
   );
   const handleUp = useCallback(
     (e: React.PointerEvent) => {
       if (e.target instanceof Element)
-        e.target.releasePointerCapture(e.pointerId);
-      joy.fire = false;
+        if (e.target.hasPointerCapture(e.pointerId)) e.target.releasePointerCapture(e.pointerId);
+      updateTouchInput(joy, { fire: false });
     },
     [joy],
   );
@@ -193,7 +194,7 @@ function DPadSpecialButton({
   const handleDown = useCallback(
     (e: React.PointerEvent) => {
       e.stopPropagation();
-      joy.special = true;
+      updateTouchInput(joy, { special: true });
     },
     [joy],
   );

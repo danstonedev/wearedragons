@@ -53,7 +53,7 @@ export default function MissionBrief({
 
         <div className="brief-actions">
           <button type="button" className="brief-btn brief-btn-back" onClick={onBack}>
-            CHANGE DRAGON
+            BACK TO MISSIONS
           </button>
           <button
             type="button"

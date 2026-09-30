@@ -1,3 +1,4 @@
+import { updateTouchInput } from "./inputState";
 import { useRef, useState, useCallback, useEffect } from "react";
 import type { DragonType } from "../dragons";
 import "./TouchControls.css";
@@ -53,13 +54,13 @@ function SteeringStick({
       const normY = dy / maxDist;
 
       // Apply deadzone
-      joy.left.x = Math.abs(normX) > deadzone ? normX : 0;
+      updateTouchInput(joy, { turn: Math.abs(normX) > deadzone ? normX : 0 });
       // Y axis: stick up = climb (positive altitude), stick down = dive
-      joy.left.y = Math.abs(normY) > deadzone ? -normY : 0;
+      updateTouchInput(joy, { climb: Math.abs(normY) > deadzone ? -normY : 0 });
 
       // Auto-throttle: engaged when stick is active
       const displacement = dist / maxDist;
-      joy.throttle = displacement > deadzone ? 0.85 : 0.7;
+      updateTouchInput(joy, { throttle: displacement > deadzone ? 0.85 : 0.7 });
     },
     [joy, maxDist],
   );
@@ -90,13 +91,13 @@ function SteeringStick({
   const handlePointerUp = useCallback(
     (e: React.PointerEvent) => {
       if (e.target instanceof Element) {
-        e.target.releasePointerCapture(e.pointerId);
+        if (e.target.hasPointerCapture(e.pointerId)) e.target.releasePointerCapture(e.pointerId);
       }
       setActive(false);
       setThumbPos({ x: 0, y: 0 });
-      joy.left.x = 0;
-      joy.left.y = 0;
-      joy.throttle = 0;
+      updateTouchInput(joy, { turn: 0 });
+      updateTouchInput(joy, { climb: 0 });
+      updateTouchInput(joy, { throttle: 0 });
     },
     [joy],
   );
@@ -165,7 +166,7 @@ function FireButton({ joy }: { joy: JoyState }) {
         e.target.setPointerCapture(e.pointerId);
       }
       setActive(true);
-      joy.fire = true;
+      updateTouchInput(joy, { fire: true });
     },
     [joy],
   );
@@ -173,10 +174,10 @@ function FireButton({ joy }: { joy: JoyState }) {
   const handleUp = useCallback(
     (e: React.PointerEvent) => {
       if (e.target instanceof Element) {
-        e.target.releasePointerCapture(e.pointerId);
+        if (e.target.hasPointerCapture(e.pointerId)) e.target.releasePointerCapture(e.pointerId);
       }
       setActive(false);
-      joy.fire = false;
+      updateTouchInput(joy, { fire: false });
     },
     [joy],
   );
@@ -216,7 +217,7 @@ function SpecialButton({
   const handleDown = useCallback(
     (e: React.PointerEvent) => {
       e.stopPropagation();
-      joy.special = true;
+      updateTouchInput(joy, { special: true });
     },
     [joy],
   );

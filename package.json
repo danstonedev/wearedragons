@@ -1,5 +1,5 @@
 {
-  "name": "vite-temp",
+  "name": "we-are-dragons",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -7,12 +7,17 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "test": "node --test --test-isolation=none tests/*.test.mjs",
     "preview": "vite preview"
+  },
+  "engines": {
+    "node": ">=24.0.0"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.5.0",
     "@react-three/rapier": "^2.2.0",
+    "@react-three/xr": "^6.6.31",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "three": "^0.182.0"

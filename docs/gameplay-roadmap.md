@@ -1,5 +1,7 @@
 # We Are Dragons Gameplay Roadmap
 
+> Historical design plan. The prototype now includes four missions, tower enemies, health, failure/results, and star ratings, so the original current-state statements below no longer describe the repository. Use [the modernization audit](modernization-audit.md) for the current evidence, fixes, priorities, and desktop/Quest validation gates. The narrative and campaign ideas here remain useful future design material.
+
 ## Purpose
 
 This document turns the current prototype into an implementation plan.

@@ -22,10 +22,10 @@ export default function ProjectileMesh({
 }) {
   const meshRef = useRef<THREE.Mesh>(null);
 
-  useFrame(() => {
+  useFrame((_, delta) => {
     if (!spin || !meshRef.current) return;
-    meshRef.current.rotation.x += 0.15;
-    meshRef.current.rotation.y += 0.2;
+    meshRef.current.rotation.x += delta * 9;
+    meshRef.current.rotation.y += delta * 12;
   });
 
   switch (attack.style) {

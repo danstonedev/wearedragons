@@ -20,4 +20,13 @@ export default defineConfig([
       globals: globals.browser,
     },
   },
+  {
+    files: ['src/world/**/*.tsx', 'src/vr/VRFlight.tsx', 'src/DragonSelect.tsx'],
+    rules: {
+      // R3F intentionally mutates owned Three.js / Rapier objects in its frame loop.
+      // React Compiler's immutability analysis cannot distinguish these from React data.
+      // Keep the ordinary hooks, dependencies, purity and state rules enabled.
+      'react-hooks/immutability': 'off',
+    },
+  },
 ])
