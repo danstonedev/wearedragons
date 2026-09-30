@@ -26,6 +26,11 @@ test("dragon instances own their recolored materials and leave the GLTF cache in
     assert.notEqual(mesh.material, originalMaterials[i]);
     assert.equal(mesh.geometry, bm[i].geometry);
   });
+  const skinA = am.find(mesh => mesh.material.name === "Main");
+  const skinB = bm.find(mesh => mesh.material.name === "Main");
+  assert.ok(skinA.material.bumpMap?.isDataTexture);
+  assert.equal(skinA.material.bumpMap, skinB.material.bumpMap);
+  assert.ok(skinA.material.bumpScale > 0);
   assert.deepEqual(meshes(gltf.scene).map(mesh => mesh.material), originalMaterials);
 });
 

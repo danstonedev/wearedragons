@@ -759,6 +759,35 @@ export function animateDragonEffects(
   }
 }
 
+/** Shared small relief map; palette-specific materials remain owned by each dragon. */
+function makeScaleRelief() {
+  const size = 128;
+  const pixels = new Uint8Array(size * size * 4);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const row = Math.floor(y / 12);
+      const u = ((x + (row % 2) * 8) % 16) / 16 - 0.5;
+      const v = (y % 12) / 12 - 0.5;
+      const arc = Math.sqrt(u * u * 1.25 + v * v);
+      const grain = Math.sin(x * 2.13 + y * 1.71) * Math.sin(x * 0.83 - y * 2.27) * 8;
+      const value = Math.max(0, Math.min(255, 192 + (0.44 - arc) * 65 + grain));
+      const index = (y * size + x) * 4;
+      pixels[index] = pixels[index + 1] = pixels[index + 2] = value;
+      pixels[index + 3] = 255;
+    }
+  }
+  const texture = new THREE.DataTexture(pixels, size, size, THREE.RGBAFormat);
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.repeat.set(5, 5);
+  texture.magFilter = THREE.LinearFilter;
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.generateMipmaps = true;
+  texture.needsUpdate = true;
+  return texture;
+}
+
+const scaleRelief = makeScaleRelief();
+
 /**
  * Color a dragon.glb scene's meshes based on a DragonType color palette.
  *
@@ -789,6 +818,8 @@ export function colorDragonModel(
           color: colors.body,
           roughness: fx.bodyRoughness ?? 0.7,
           metalness: fx.bodyMetalness ?? 0.05,
+          bumpMap: scaleRelief,
+          bumpScale: 0.035,
           ...(fx.bodyEmissive && {
             emissive: fx.bodyEmissive,
             emissiveIntensity: fx.bodyEmissiveIntensity ?? 0.3,
@@ -818,6 +849,8 @@ export function colorDragonModel(
           color: colors.belly,
           roughness: 0.65,
           metalness: 0.02,
+          bumpMap: scaleRelief,
+          bumpScale: 0.018,
           ...(fx.bellyEmissive && {
             emissive: fx.bellyEmissive,
             emissiveIntensity: fx.bellyEmissiveIntensity ?? 0.3,

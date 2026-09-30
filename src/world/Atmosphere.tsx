@@ -18,11 +18,11 @@ export default function Atmosphere({ region = "pyrrhia" }: { region?: string }) 
   });
   return <>
     <color attach="background" args={[mist]} />
-    <fog attach="fog" args={[mist, 70, 215]} />
-    <Sky sunPosition={[100, 30, 100]} turbidity={4} rayleigh={1.5} />
-    <hemisphereLight args={["#d6ecff", "#65624c", 1.1]} />
+    <fog attach="fog" args={[mist, 95, 255]} />
+    <Sky sunPosition={[100, 80, 55]} turbidity={5} rayleigh={1.35} />
+    <hemisphereLight args={["#d6ecff", "#544d41", 0.82]} />
     <directionalLight
-      ref={sun} target={target} castShadow position={[35, 55, 20]} intensity={2}
+      ref={sun} target={target} castShadow position={[35, 55, 20]} intensity={2.15}
       color={region === "glaeryus" ? "#dae6ff" : "#ffe0b8"}
       shadow-mapSize={[preset.shadowMapSize, preset.shadowMapSize]}
       shadow-camera-left={-45} shadow-camera-right={45}

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useFrame } from "@react-three/fiber";
-import { CuboidCollider, RigidBody } from "@react-three/rapier";
+import { CylinderCollider, RigidBody } from "@react-three/rapier";
 import * as THREE from "three";
 import { Billboard } from "@react-three/drei";
 import { missionEmitter, playerPos, playerStatus, gameSession } from "../game/runtime";
@@ -82,34 +82,42 @@ export default function Watchtower({
   if (!alive) return null;
   return (
     <RigidBody type="fixed" colliders={false} position={position} userData={{ targetId: id }}>
-    <CuboidCollider args={[1.6, 4, 1.6]} position={[0, 4, 0]} />
+    <CylinderCollider args={[1.15, 2.3]} position={[0, 1.15, 0]} />
+    <CylinderCollider args={[3.25, 1.65]} position={[0, 5.55, 0]} />
     <group ref={meshRef}>
-      <Billboard position={[0, 10, 0]}>
+      <Billboard position={[0, 10.3, 0]}>
         <mesh><planeGeometry args={[3.2, 0.35]} /><meshBasicMaterial color="#13232b" /></mesh>
         <mesh ref={healthRef} position={[0, 0, 0.01]}><planeGeometry args={[3, 0.22]} /><meshBasicMaterial color="#ffb45b" /></mesh>
       </Billboard>
-      {/* Stone base */}
-      <mesh castShadow receiveShadow position={[0, 2, 0]}>
-        <boxGeometry args={[3, 4, 3]} />
-        <meshStandardMaterial color="#665544" roughness={0.9} />
+      <mesh castShadow receiveShadow position={[0, 1.15, 0]}>
+        <cylinderGeometry args={[1.95, 2.35, 2.3, 16]} />
+        <meshStandardMaterial color="#71675a" roughness={0.96} />
       </mesh>
-      {/* Tower shaft */}
-      <mesh castShadow receiveShadow position={[0, 5.5, 0]}>
-        <boxGeometry args={[2.2, 3, 2.2]} />
-        <meshStandardMaterial color="#776655" roughness={0.85} />
+      <mesh castShadow receiveShadow position={[0, 4.6, 0]}>
+        <cylinderGeometry args={[1.32, 1.82, 5.8, 16, 4]} />
+        <meshStandardMaterial color="#8f8171" roughness={0.94} />
       </mesh>
-      {/* Battlement top */}
-      <mesh castShadow receiveShadow position={[0, 7.5, 0]}>
-        <boxGeometry args={[3.2, 1, 3.2]} />
-        <meshStandardMaterial color="#554433" roughness={0.9} />
+      {[2.3, 5.2, 7.2].map(height => <mesh key={height} position={[0, height, 0]} rotation={[Math.PI / 2, 0, 0]} castShadow>
+        <torusGeometry args={[height === 2.3 ? 1.78 : 1.42, 0.11, 5, 20]} />
+        <meshStandardMaterial color="#625b52" roughness={0.98} />
+      </mesh>)}
+      <mesh castShadow receiveShadow position={[0, 7.9, 0]}>
+        <cylinderGeometry args={[1.85, 1.46, 1.05, 16]} />
+        <meshStandardMaterial color="#665d52" roughness={0.94} />
       </mesh>
-      {/* Fire brazier glow */}
-      <mesh position={[0, 8.5, 0]}>
-        <sphereGeometry args={[0.5, 8, 8]} />
-        <meshBasicMaterial color="#ff4400" />
+      {Array.from({ length: 12 }, (_, i) => {
+        const angle = i / 12 * Math.PI * 2;
+        return <mesh key={i} castShadow position={[Math.cos(angle) * 1.6, 8.65, Math.sin(angle) * 1.6]} rotation={[0, -angle, 0]}>
+          <boxGeometry args={[0.55, 0.65, 0.65]} />
+          <meshStandardMaterial color="#756b5d" roughness={0.96} />
+        </mesh>;
+      })}
+      <mesh position={[0, 8.9, 0]}>
+        <sphereGeometry args={[0.42, 12, 10]} />
+        <meshBasicMaterial color="#ff6b24" />
       </mesh>
       <pointLight
-        position={[0, 8.5, 0]}
+        position={[0, 8.9, 0]}
         color="#ff6600"
         intensity={3}
         distance={15}
