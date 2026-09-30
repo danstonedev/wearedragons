@@ -1,6 +1,9 @@
 import { VRLaunch, VRScene } from "./vr/VRSupport";
 import SceneBoundary from "./components/SceneBoundary";
 import Atmosphere from "./world/Atmosphere";
+import Landscape from "./world/Landscape";
+import Vegetation from "./world/Vegetation";
+import WorldDetails from "./world/WorldDetails";
 import FlightHUD from "./components/FlightHUD";
 import { useWorldSession } from "./game/useWorldSession";
 import type { Dispatch, SetStateAction } from "react";
@@ -13,15 +16,12 @@ import { joy, pan, playerPos, playerStatus, abilityState, gameSession, missionEm
 import { useRef, useEffect, useMemo, useState, useCallback } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import {
-  Plane,
-} from "@react-three/drei";
-import {
   Physics,
-  CuboidCollider,
   RigidBody,
   RapierRigidBody,
 } from "@react-three/rapier";
 import * as THREE from "three";
+import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import type { DragonType } from "./dragons";
 import {
   DRAGON_TYPES,
@@ -58,72 +58,15 @@ import type { WorldRegion } from "./game/worlds";
 import { preset, isTouchDevice } from "./utils/device";
 
 
-function Forest() {
-  const trees = useMemo(() => {
-    const result: { x: number; z: number; scale: number }[] = [];
-    const random = seededRandom(9042);
-    for (let i = 0; i < 80 && result.length < 50; i++) {
-      const x = (random() - 0.5) * 120;
-      const z = (random() - 0.5) * 120;
-      if (Math.abs(x) < 15 && Math.abs(z) < 15) continue;
-      result.push({ x, z, scale: 0.5 + random() * 1.5 });
-    }
-    return result;
-  }, []);
-
-  const trunkGeo = useMemo(() => new THREE.CylinderGeometry(0.3, 0.4, 2), []);
-  const canopyGeo = useMemo(() => new THREE.ConeGeometry(1.5, 3, 8), []);
-  const trunkMat = useMemo(
-    () => new THREE.MeshStandardMaterial({ color: "#4a3018" }),
-    [],
-  );
-  const canopyMat = useMemo(
-    () => new THREE.MeshStandardMaterial({ color: "#2d5c2f" }),
-    [],
-  );
-
-  const trunkRef = useRef<THREE.InstancedMesh>(null);
-  const canopyRef = useRef<THREE.InstancedMesh>(null);
-
-  useEffect(() => {
-    const dummy = new THREE.Object3D();
-    trees.forEach(({ x, z, scale }, i) => {
-      // Trunk: CylinderGeometry centered at origin, positioned at y=scale (1*scale)
-      dummy.position.set(x, scale, z);
-      dummy.scale.setScalar(scale);
-      dummy.updateMatrix();
-      trunkRef.current?.setMatrixAt(i, dummy.matrix);
-      // Canopy: cone positioned at y=3*scale
-      dummy.position.set(x, scale * 3, z);
-      dummy.updateMatrix();
-      canopyRef.current?.setMatrixAt(i, dummy.matrix);
-    });
-    if (trunkRef.current) trunkRef.current.instanceMatrix.needsUpdate = true;
-    if (canopyRef.current) canopyRef.current.instanceMatrix.needsUpdate = true;
-  }, [trees]);
-
-  return (
-    <>
-      <instancedMesh
-        ref={trunkRef}
-        args={[trunkGeo, trunkMat, trees.length]}
-        castShadow
-        receiveShadow
-      />
-      <instancedMesh
-        ref={canopyRef}
-        args={[canopyGeo, canopyMat, trees.length]}
-        castShadow
-        receiveShadow
-      />
-    </>
-  );
-}
+function Forest() { return <Vegetation kind="ridge" />; }
 
 // Per-layer colors: dark stone at base, ivory marble at top (RiceWing architecture)
 const CASTLE_BLOCK_COLORS = ["#b0a084", "#bcae94", "#c8bca0", "#d8cba8"];
 
 function SmashableCastle() {
+  const blockGeometry = useMemo(() => new RoundedBoxGeometry(1.9, 1.9, 1.9, 2, 0.12), []);
+  const blockMaterials = useMemo(() => CASTLE_BLOCK_COLORS.map(color => new THREE.MeshStandardMaterial({ color, roughness: 0.82, metalness: 0.04 })), []);
+  useEffect(() => () => { blockGeometry.dispose(); blockMaterials.forEach(material => material.dispose()); }, [blockGeometry, blockMaterials]);
   const blockDefs = useMemo(() => {
     const arr: { key: string; lx: number; ly: number; lz: number }[] = [];
     for (let y = 0; y < 4; y++)
@@ -183,30 +126,14 @@ function SmashableCastle() {
           position={[b.lx, b.ly, b.lz]}
           mass={0.5}
         >
-          <mesh castShadow receiveShadow>
-            <boxGeometry args={[1.9, 1.9, 1.9]} />
-            <meshStandardMaterial
-              color={CASTLE_BLOCK_COLORS[Math.floor((b.ly - 1) / 2)]}
-              roughness={0.75}
-              metalness={0.05}
-            />
-          </mesh>
+          <mesh castShadow receiveShadow geometry={blockGeometry} material={blockMaterials[Math.floor((b.ly - 1) / 2)]} />
         </RigidBody>
       ))}
     </group>
   );
 }
 
-function Terrain() {
-  return (
-    <RigidBody type="fixed" friction={1} colliders={false}>
-      <CuboidCollider args={[125, 0.5, 125]} position={[0, -0.5, 0]} />
-      <Plane args={[250, 250]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-        <meshStandardMaterial color="#3f8a4b" />
-      </Plane>
-    </RigidBody>
-  );
-}
+function Terrain() { return <Landscape kind="ridge" />; }
 
 const TOWER_POSITIONS: [number, number, number][] = [
   [-30, 0, -30],
@@ -245,14 +172,23 @@ function BeaconObj({
 
   return (
     <group position={position}>
-      {/* Base pillar */}
-      <mesh castShadow receiveShadow position={[0, 3, 0]}>
-        <cylinderGeometry args={[1.5, 2, 6, 8]} />
-        <meshStandardMaterial color="#334455" roughness={0.6} metalness={0.3} />
+      <mesh castShadow receiveShadow position={[0, 0.65, 0]}>
+        <cylinderGeometry args={[2.5, 3.1, 1.3, 16]} />
+        <meshStandardMaterial color="#67675f" roughness={0.95} />
       </mesh>
-      {/* Beacon ring */}
+      <mesh castShadow receiveShadow position={[0, 3.7, 0]}>
+        <cylinderGeometry args={[0.72, 1.45, 6.2, 16, 4]} />
+        <meshStandardMaterial color="#86877e" roughness={0.9} />
+      </mesh>
+      {Array.from({ length: 3 }, (_, i) => {
+        const angle = i / 3 * Math.PI * 2;
+        return <mesh key={i} castShadow position={[Math.sin(angle) * 1.55, 7.25, Math.cos(angle) * 1.55]} rotation={[Math.sin(angle) * 0.28, angle, -Math.cos(angle) * 0.28]}>
+          <cylinderGeometry args={[0.17, 0.3, 5.2, 10]} />
+          <meshStandardMaterial color="#797b73" roughness={0.88} />
+        </mesh>;
+      })}
       <mesh ref={ringRef} position={[0, 10, 0]}>
-        <torusGeometry args={[3, 0.3, 8, 24]} />
+        <torusGeometry args={[3, 0.22, 12, 48]} />
         <meshStandardMaterial
           color={active ? "#ffd700" : "#333"}
           emissive={active ? "#ffd700" : "#000"}
@@ -268,12 +204,10 @@ function BeaconObj({
           distance={30}
         />
       )}
-      {!active && (
-        <mesh position={[0, 10, 0]}>
-          <sphereGeometry args={[0.8, 8, 8]} />
-          <meshStandardMaterial color="#222" roughness={1} />
-        </mesh>
-      )}
+      <mesh position={[0, 10, 0]}>
+        <dodecahedronGeometry args={[0.68, 1]} />
+        <meshStandardMaterial color={active ? "#fff0a6" : "#292c2b"} emissive={active ? "#ffd700" : "#000"} emissiveIntensity={active ? 2 : 0} roughness={0.35} />
+      </mesh>
     </group>
   );
 }
@@ -731,262 +665,11 @@ function DragonSwitcher({
 // Open World — helper functions, components, and main view
 // ============================================================
 
-/** Deterministic PRNG for stable world geometry across renders */
-function seededRandom(seed: number) {
-  let s = seed >>> 0;
-  return () => {
-    s = Math.imul(48271, s) | 0;
-    return (s & 0x7fffffff) / 0x7fffffff;
-  };
-}
-
 /** Large physics + visual terrain split into three region color zones */
-function OpenWorldTerrain() {
-  return (
-    <>
-      {/* Physics plane + Pyrrhia base (green) */}
-      <RigidBody type="fixed" friction={1} colliders={false}>
-        <CuboidCollider args={[200, 0.5, 200]} position={[0, -0.5, 0]} />
-        <Plane args={[400, 400]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-          <meshStandardMaterial color="#3f8a4b" />
-        </Plane>
-      </RigidBody>
-      {/* Pantala visual overlay: x≥0, z≥30 → center (100,0,115), size 200×170 */}
-      <mesh position={[100, 0.02, 115]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-        <planeGeometry args={[200, 170]} />
-        <meshStandardMaterial color="#b88c3a" />
-      </mesh>
-      {/* Glaeryus visual overlay: x<0, z≥30 → center (-100,0,115), size 200×170 */}
-      <mesh position={[-100, 0.02, 115]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-        <planeGeometry args={[200, 170]} />
-        <meshStandardMaterial color="#3e4b52" />
-      </mesh>
-    </>
-  );
-}
+function OpenWorldTerrain() { return <Landscape kind="open" />; }
 
 /** Wider Pyrrhia forest spread across the northern zone */
-function OpenWorldForest() {
-  const trees = useMemo(() => {
-    const rand = seededRandom(12345);
-    const result: { x: number; z: number; scale: number }[] = [];
-    for (let i = 0; i < 600 && result.length < 120; i++) {
-      const x = (rand() - 0.5) * 360;
-      const z = rand() * 220 - 200; // z: -200 to 20 (Pyrrhia zone)
-      if (Math.abs(x) < 22 && z > -35 && z < 20) continue;
-      result.push({ x, z, scale: 0.6 + rand() * 1.8 });
-    }
-    return result;
-  }, []);
-
-  const trunkGeo = useMemo(() => new THREE.CylinderGeometry(0.3, 0.4, 2), []);
-  const canopyGeo = useMemo(() => new THREE.ConeGeometry(1.5, 3, 8), []);
-  const trunkMat = useMemo(
-    () => new THREE.MeshStandardMaterial({ color: "#4a3018" }),
-    [],
-  );
-  const canopyMat = useMemo(
-    () => new THREE.MeshStandardMaterial({ color: "#2d5c2f" }),
-    [],
-  );
-  const trunkRef = useRef<THREE.InstancedMesh>(null);
-  const canopyRef = useRef<THREE.InstancedMesh>(null);
-
-  useEffect(() => {
-    const dummy = new THREE.Object3D();
-    trees.forEach(({ x, z, scale }, i) => {
-      dummy.position.set(x, scale, z);
-      dummy.scale.setScalar(scale);
-      dummy.updateMatrix();
-      trunkRef.current?.setMatrixAt(i, dummy.matrix);
-      dummy.position.set(x, scale * 3, z);
-      dummy.updateMatrix();
-      canopyRef.current?.setMatrixAt(i, dummy.matrix);
-    });
-    if (trunkRef.current) trunkRef.current.instanceMatrix.needsUpdate = true;
-    if (canopyRef.current) canopyRef.current.instanceMatrix.needsUpdate = true;
-  }, [trees]);
-
-  return (
-    <>
-      <instancedMesh
-        ref={trunkRef}
-        args={[trunkGeo, trunkMat, trees.length]}
-        castShadow
-        receiveShadow
-      />
-      <instancedMesh
-        ref={canopyRef}
-        args={[canopyGeo, canopyMat, trees.length]}
-        castShadow
-        receiveShadow
-      />
-    </>
-  );
-}
-
-/** Pantala: sandy rock spires in the southeastern sector */
-function PantalaDecor() {
-  const spires = useMemo(() => {
-    const rand = seededRandom(99999);
-    const result: { x: number; z: number; scale: number; rotY: number }[] = [];
-    for (let i = 0; i < 300 && result.length < 80; i++) {
-      const x = rand() * 185 + 8;   // x: 8–193 (Pantala, x ≥ 0)
-      const z = rand() * 165 + 35;  // z: 35–200
-      const scale = 0.7 + rand() * 2.0;
-      const rotY = rand() * Math.PI * 2;
-      result.push({ x, z, scale, rotY });
-    }
-    return result;
-  }, []);
-
-  const spireGeo = useMemo(
-    () => new THREE.CylinderGeometry(0.3, 0.95, 5, 6),
-    [],
-  );
-  const boulderGeo = useMemo(() => new THREE.DodecahedronGeometry(0.7, 0), []);
-  const spireMat = useMemo(
-    () =>
-      new THREE.MeshStandardMaterial({ color: "#8b5e3c", roughness: 0.9 }),
-    [],
-  );
-  const boulderMat = useMemo(
-    () =>
-      new THREE.MeshStandardMaterial({ color: "#a07050", roughness: 0.85 }),
-    [],
-  );
-  const spireRef = useRef<THREE.InstancedMesh>(null);
-  const boulderRef = useRef<THREE.InstancedMesh>(null);
-
-  useEffect(() => {
-    const dummy = new THREE.Object3D();
-    spires.forEach(({ x, z, scale, rotY }, i) => {
-      dummy.position.set(x, scale * 2.5, z);
-      dummy.scale.setScalar(scale);
-      dummy.rotation.set(0, rotY, 0);
-      dummy.updateMatrix();
-      spireRef.current?.setMatrixAt(i, dummy.matrix);
-      dummy.position.set(x + scale * 1.3, scale * 0.65, z);
-      dummy.scale.setScalar(scale * 0.65);
-      dummy.rotation.set(0, rotY + 1.1, 0);
-      dummy.updateMatrix();
-      boulderRef.current?.setMatrixAt(i, dummy.matrix);
-    });
-    if (spireRef.current) spireRef.current.instanceMatrix.needsUpdate = true;
-    if (boulderRef.current) boulderRef.current.instanceMatrix.needsUpdate = true;
-  }, [spires]);
-
-  return (
-    <>
-      <instancedMesh
-        ref={spireRef}
-        args={[spireGeo, spireMat, spires.length]}
-        castShadow
-        receiveShadow
-      />
-      <instancedMesh
-        ref={boulderRef}
-        args={[boulderGeo, boulderMat, spires.length]}
-        castShadow
-        receiveShadow
-      />
-    </>
-  );
-}
-
-/** Glaeryus: dark stone monoliths + cold crystal formations */
-function GlaeryusDecor() {
-  const monoliths = useMemo(() => {
-    const rand = seededRandom(55555);
-    const result: { x: number; z: number; h: number; w: number; rotY: number }[] =
-      [];
-    for (let i = 0; i < 200 && result.length < 60; i++) {
-      const x = -(rand() * 185 + 8);  // x: -8 to -193 (Glaeryus, x < 0)
-      const z = rand() * 165 + 35;    // z: 35–200
-      const h = 5 + rand() * 12;
-      const w = 0.9 + rand() * 1.5;
-      const rotY = rand() * Math.PI * 2;
-      result.push({ x, z, h, w, rotY });
-    }
-    return result;
-  }, []);
-
-  const crystals = useMemo(() => {
-    const rand = seededRandom(77777);
-    const result: { x: number; z: number; scale: number }[] = [];
-    for (let i = 0; i < 200 && result.length < 40; i++) {
-      const x = -(rand() * 180 + 10);
-      const z = rand() * 160 + 38;
-      const scale = 0.7 + rand() * 1.5;
-      result.push({ x, z, scale });
-    }
-    return result;
-  }, []);
-
-  const monolithGeo = useMemo(() => new THREE.BoxGeometry(1, 1, 1), []);
-  const crystalGeo = useMemo(() => new THREE.OctahedronGeometry(1, 0), []);
-  const monolithMat = useMemo(
-    () =>
-      new THREE.MeshStandardMaterial({
-        color: "#2e363e",
-        roughness: 0.8,
-        metalness: 0.15,
-      }),
-    [],
-  );
-  const crystalMat = useMemo(
-    () =>
-      new THREE.MeshStandardMaterial({
-        color: "#44bbff",
-        emissive: "#1e88e5",
-        emissiveIntensity: 0.55,
-        roughness: 0.1,
-        metalness: 0.7,
-        transparent: true,
-        opacity: 0.82,
-      }),
-    [],
-  );
-  const monolithRef = useRef<THREE.InstancedMesh>(null);
-  const crystalRef = useRef<THREE.InstancedMesh>(null);
-
-  useEffect(() => {
-    const dummy = new THREE.Object3D();
-    monoliths.forEach(({ x, z, h, w, rotY }, i) => {
-      dummy.position.set(x, h / 2, z);
-      dummy.scale.set(w, h, w * 0.65);
-      dummy.rotation.set(0, rotY, 0);
-      dummy.updateMatrix();
-      monolithRef.current?.setMatrixAt(i, dummy.matrix);
-    });
-    crystals.forEach(({ x, z, scale }, i) => {
-      dummy.position.set(x, scale * 1.2, z);
-      dummy.scale.setScalar(scale * 1.6);
-      dummy.rotation.set(0, 0, 0);
-      dummy.updateMatrix();
-      crystalRef.current?.setMatrixAt(i, dummy.matrix);
-    });
-    if (monolithRef.current)
-      monolithRef.current.instanceMatrix.needsUpdate = true;
-    if (crystalRef.current)
-      crystalRef.current.instanceMatrix.needsUpdate = true;
-  }, [monoliths, crystals]);
-
-  return (
-    <>
-      <instancedMesh
-        ref={monolithRef}
-        args={[monolithGeo, monolithMat, monoliths.length]}
-        castShadow
-        receiveShadow
-      />
-      <instancedMesh
-        ref={crystalRef}
-        args={[crystalGeo, crystalMat, crystals.length]}
-      />
-    </>
-  );
-}
+function OpenWorldForest() { return <Vegetation kind="open" />; }
 
 /** Discoverable world beacon — glows and fires onDiscovered when player flies through */
 function WorldBeacon({
@@ -1021,14 +704,16 @@ function WorldBeacon({
 
   return (
     <group position={pos}>
-      {/* Base pillar */}
-      <mesh castShadow receiveShadow position={[0, 3, 0]}>
-        <cylinderGeometry args={[1.3, 1.9, 6, 8]} />
-        <meshStandardMaterial color="#334455" roughness={0.6} metalness={0.3} />
+      <mesh castShadow receiveShadow position={[0, 0.65, 0]}>
+        <cylinderGeometry args={[2.4, 3, 1.3, 16]} />
+        <meshStandardMaterial color="#686b67" roughness={0.95} />
       </mesh>
-      {/* Spinning beacon ring */}
+      <mesh castShadow receiveShadow position={[0, 3.8, 0]}>
+        <cylinderGeometry args={[0.68, 1.35, 6.3, 16, 4]} />
+        <meshStandardMaterial color="#858982" roughness={0.9} />
+      </mesh>
       <mesh ref={ringRef} position={[0, 10, 0]}>
-        <torusGeometry args={[3, 0.3, 8, 24]} />
+        <torusGeometry args={[3, 0.22, 12, 48]} />
         <meshStandardMaterial
           color={discovered ? region.beaconColor : "#333"}
           emissive={discovered ? region.beaconColor : "#000"}
@@ -1312,9 +997,8 @@ function OpenWorldView({
         <MissionTimer />
         <Physics debug={false} paused={paused}>
           <OpenWorldTerrain />
+          <WorldDetails kind="open" />
           <OpenWorldForest />
-          <PantalaDecor />
-          <GlaeryusDecor />
           {WORLD_REGIONS.map((r) => (
             <WorldBeacon
               key={r.id}
@@ -1545,6 +1229,7 @@ function GameWorld({
         <MissionTimer onTick={handleTimerTick} />
         <Physics debug={false} paused={paused}>
           <Terrain />
+          <WorldDetails kind="ridge" />
           <Forest />
 
           {/* Fortress Raid: static towers + beacon */}

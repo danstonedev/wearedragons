@@ -12,8 +12,9 @@ test("actual Rapier CCD catches fast projectiles against a watchtower at differe
       const world = new RAPIER.World({ x: 0, y: 0, z: 0 });
       try {
         world.timestep = 1 / fps;
-        const tower = world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(0, 4, 0));
-        world.createCollider(RAPIER.ColliderDesc.cuboid(1.6, 4, 1.6), tower);
+        const tower = world.createRigidBody(RAPIER.RigidBodyDesc.fixed());
+        world.createCollider(RAPIER.ColliderDesc.cylinder(1.15, 2.3).setTranslation(0, 1.15, 0), tower);
+        world.createCollider(RAPIER.ColliderDesc.cylinder(3.25, 1.65).setTranslation(0, 5.55, 0), tower);
         const shot = world.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(0, 4, 10).setLinvel(0, 0, -speed).setCcdEnabled(true));
         world.createCollider(RAPIER.ColliderDesc.ball(0.3).setCollisionGroups(projectileGroup).setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS), shot);
         const queue = new RAPIER.EventQueue(true);

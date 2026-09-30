@@ -5,6 +5,7 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { clone } from "three/examples/jsm/utils/SkeletonUtils.js";
 import { DRAGON_TYPES, colorDragonModel } from "../src/dragons.ts";
+import { dragonAttachmentPlan, silhouetteFamily } from "../src/game/dragonVisuals.ts";
 
 const bytes = await readFile(new URL("../public/dragon.glb", import.meta.url));
 const gltf = await new Promise((resolve, reject) => new GLTFLoader().parse(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength), "", resolve, reject));
@@ -26,6 +27,11 @@ test("dragon instances own their recolored materials and leave the GLTF cache in
     assert.notEqual(mesh.material, originalMaterials[i]);
     assert.equal(mesh.geometry, bm[i].geometry);
   });
+  const skinA = am.find(mesh => mesh.material.name === "Main");
+  const skinB = bm.find(mesh => mesh.material.name === "Main");
+  assert.ok(skinA.material.bumpMap?.isDataTexture);
+  assert.equal(skinA.material.bumpMap, skinB.material.bumpMap);
+  assert.ok(skinA.material.bumpScale > 0);
   assert.deepEqual(meshes(gltf.scene).map(mesh => mesh.material), originalMaterials);
 });
 
@@ -45,4 +51,44 @@ test("owned skeletons animate independently without binding to another dragon's 
   });
   assert.equal(changed, true);
   mixer.uncacheRoot(a);
+});
+
+test("the roster has distinct silhouette families for every selectable dragon", () => {
+  const families = DRAGON_TYPES.map(dragon => silhouetteFamily(dragon.id));
+  assert.equal(families.length, DRAGON_TYPES.length);
+  assert.ok(families.every(Boolean));
+  assert.equal(new Set(families).size, 6);
+});
+
+test("every silhouette attachment binds to the real skeleton and follows every animation", () => {
+  const plans = DRAGON_TYPES.flatMap(dragon => dragonAttachmentPlan(dragon.id));
+  assert.ok(plans.length > 0);
+  for (const part of plans) {
+    assert.ok(gltf.scene.getObjectByName(part.bone)?.isBone, `missing attachment bone ${part.bone}`);
+    assert.ok(part.scale.every(value => value > 0));
+  }
+
+  for (const clip of gltf.animations) {
+    const scene = clone(gltf.scene);
+    const attachments = [...new Set(plans.map(part => part.bone))].map(name => {
+      const marker = new THREE.Object3D();
+      marker.position.set(0.17, 0.23, -0.11);
+      scene.getObjectByName(name).add(marker);
+      return marker;
+    });
+    scene.updateMatrixWorld(true);
+    const before = attachments.map(marker => marker.matrixWorld.clone());
+    const mixer = new THREE.AnimationMixer(scene);
+    mixer.clipAction(clip).play();
+    mixer.update(clip.duration * 0.37);
+    scene.updateMatrixWorld(true);
+    for (const marker of attachments) {
+      assert.ok(marker.matrixWorld.elements.every(Number.isFinite), `${clip.name} produced an invalid attachment transform`);
+    }
+    assert.ok(
+      attachments.some((marker, index) => !marker.matrixWorld.equals(before[index])),
+      `${clip.name} did not move any attachment bone`,
+    );
+    mixer.uncacheRoot(scene);
+  }
 });
