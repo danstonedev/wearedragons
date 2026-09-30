@@ -145,9 +145,7 @@ function DragonModel({
   return (
     <group ref={groupRef}>
       <primitive object={clonedScene} />
-      <group scale={0.3} rotation={[0, Math.PI * 0.8, 0]} position={[0, -0.5, 0]}>
-        <DragonAdornments dragon={dragon} />
-      </group>
+      <DragonAdornments dragon={dragon} scene={clonedScene} />
     </group>
   );
 }
