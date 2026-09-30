@@ -51,7 +51,7 @@ The headset camera follows position and yaw without copying the dragon's pitch o
 - **Jade Citadel Strike:** displace 40 of 64 castle blocks within 120 seconds.
 - **Free flight:** explore Pyrrhia, Pantala, and Glaeryus and discover their beacons.
 
-Flight now accelerates and brakes smoothly, with a ground clearance guard. Player projectiles use continuous Rapier collision detection; enemy shots use swept hit tests. Mission progress uses functional updates and unique event identities. Armor, healing, cloak, and barrel-roll protection affect combat. Settings, the world map, tab visibility, and manual pause stop the simulation.
+Flight now accelerates and brakes smoothly, with capsule sweeps against physical terrain, towers, and castle blocks, slower ground movement, and visible grounded/takeoff/landing/dive/cruise/hover states. Aiming guidance, tower health bars, impact bursts, and hit confirmations improve combat readability. Decorative forest/region props still need their own collision geometry. Player projectiles use continuous Rapier collision detection; enemy shots use swept hit tests. Mission progress uses functional updates and unique event identities. Armor, healing, cloak, and barrel-roll protection affect combat. Settings, the world map, tab visibility, and manual pause stop the simulation.
 
 ## Development guide
 

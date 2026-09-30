@@ -852,6 +852,7 @@ html, body, #root {
 .flight-controls-hint { position: absolute; left: 18px; bottom: 72px; max-width: calc(100% - 36px); padding: 10px 14px; border-radius: 10px; background: #0c1b25d9; color: #e6edf0; font: 12px/1.5 system-ui, sans-serif; pointer-events: none; }
 .flight-pause { position: absolute; left: 18px; top: 18px; z-index: 12; padding: 10px 14px; border: 1px solid #c1d2dc77; border-radius: 9px; background: #0c1b25dd; color: #f3e6be; cursor: pointer; }
 .flight-ability { position: absolute; right: 20px; bottom: 22px; color: #e8f4ff; background: #0c1b25d9; padding: 9px 14px; border-radius: 9px; font: bold 13px system-ui, sans-serif; pointer-events: none; }
+.combat-confirmation { position: absolute; left: 50%; top: 60%; transform: translateX(-50%); padding: 8px 14px; color: #ffd27c; background: #0c1b25d9; border-radius: 8px; font: bold 13px system-ui, sans-serif; pointer-events: none; }
 .flight-pause-overlay { position: absolute; inset: 0; z-index: 18; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #09141dcc; color: #f3e6be; backdrop-filter: blur(5px); }
 .flight-pause-overlay button, .vr-launch button { padding: 12px 18px; border: 1px solid #c1d2dc99; border-radius: 8px; color: #f3e6be; background: #173344; font-weight: 700; cursor: pointer; }
 .vr-launch { position: absolute; left: 18px; top: 64px; z-index: 12; max-width: 330px; display: grid; gap: 8px; font: 11px/1.4 system-ui, sans-serif; color: #e6edf0; }

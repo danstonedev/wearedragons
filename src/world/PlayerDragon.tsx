@@ -1,16 +1,19 @@
 import { useRef, useEffect, useMemo } from "react";
 import { useFrame } from "@react-three/fiber";
 import { PerspectiveCamera, useGLTF, useAnimations } from "@react-three/drei";
-import { RigidBody, useRapier } from "@react-three/rapier";
-import type { RapierRigidBody } from "@react-three/rapier";
+import { CapsuleCollider, RigidBody, useRapier, useBeforePhysicsStep } from "@react-three/rapier";
+import type { RapierRigidBody, RapierCollider } from "@react-three/rapier";
+import type { KinematicCharacterController } from "@dimforge/rapier3d-compat";
 import { SkeletonUtils } from "three-stdlib";
 import * as THREE from "three";
 import type { DragonType } from "../dragons";
 import { colorDragonModel, animateDragonEffects } from "../dragons";
-import { keys, joy, pan, abilityState, playerPos, playerStatus, gameSession, xrInput, resetInput, shoot, missionEmitter } from "../game/runtime";
+import { keys, joy, pan, abilityState, playerPos, playerStatus, gameSession, xrInput, resetInput, shoot, missionEmitter, aim, combatFeedback } from "../game/runtime";
 import { clampInput, damp, damping, flightVelocity } from "../game/flight";
 import { createAbilityState, activateAbility, stepAbility } from "../game/abilities";
 import { settings } from "../controls/ControlSettings";
+import { configureFlightController, moveFlightCharacter, PLAYER_GROUPS, PLAYER_CAPSULE, flightMode } from "../game/characterMovement";
+import { safeMuzzle, WORLD_ONLY } from "../game/aim";
 
 const DRAGON_MODEL = `${import.meta.env.BASE_URL}dragon.glb`;
 
@@ -20,6 +23,10 @@ export default function PlayerDragon({ dragon }: { dragon: DragonType }) {
   const atk = dragon.attack;
   const spec = dragon.special;
   const rbRef = useRef<RapierRigidBody>(null);
+  const colliderRef = useRef<RapierCollider>(null);
+  const controllerRef = useRef<KinematicCharacterController | null>(null);
+  const desiredVelocity = useRef({ x: 0, y: 0, z: 0 });
+  const actualVelocity = useRef({ x: 0, y: 0, z: 0 });
   const visualGroupRef = useRef<THREE.Group>(null);
 
   const cameraRef = useRef<THREE.PerspectiveCamera>(null);
@@ -31,6 +38,7 @@ export default function PlayerDragon({ dragon }: { dragon: DragonType }) {
 
   useEffect(() => {
     resetInput();
+    Object.assign(combatFeedback, { hitAt: -999, destroyedAt: -999 });
     gameSession.ready = true;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLElement && (e.target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName))) return;
@@ -70,6 +78,17 @@ export default function PlayerDragon({ dragon }: { dragon: DragonType }) {
   const lastFireTimeRef = useRef(-999);
 
   const { rapier, world } = useRapier();
+  useEffect(() => {
+    const controller = world.createCharacterController(PLAYER_CAPSULE.offset);
+    configureFlightController(controller);
+    controllerRef.current = controller;
+    return () => { controllerRef.current = null; world.removeCharacterController(controller); };
+  }, [world]);
+  useBeforePhysicsStep(() => {
+    if (gameSession.paused || !rbRef.current || !colliderRef.current || !controllerRef.current) return;
+    const result = moveFlightCharacter(controllerRef.current, rbRef.current, colliderRef.current, desiredVelocity.current, world.timestep, rapier.QueryFilterFlags.EXCLUDE_SENSORS);
+    Object.assign(actualVelocity.current, result.velocity);
+  });
   const { scene: sourceScene, animations: rawAnimations } = useGLTF(DRAGON_MODEL);
   // The loader cache is shared with every selection preview. Own this skeleton/material set.
   const scene = useMemo(() => {
@@ -132,6 +151,7 @@ export default function PlayerDragon({ dragon }: { dragon: DragonType }) {
     () => new rapier.Ray({ x: 0, y: 0, z: 0 }, { x: 0, y: -1, z: 0 }),
     [rapier],
   );
+  const _muzzleRay = useMemo(() => new rapier.Ray({ x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: -1 }), [rapier]);
 
   useEffect(() => {
     const flyAction = actions["Dragon_Flying"] ?? Object.values(actions)[0];
@@ -154,7 +174,7 @@ export default function PlayerDragon({ dragon }: { dragon: DragonType }) {
   useFrame((state, frameDelta) => {
     if (!rbRef.current || !visualGroupRef.current) return;
     const body = rbRef.current;
-    if (gameSession.paused) { body.setLinvel({ x: 0, y: 0, z: 0 }, true); return; }
+    if (gameSession.paused) { Object.assign(desiredVelocity.current, { x: 0, y: 0, z: 0 }); return; }
     const delta = Math.min(frameDelta, 1 / 15);
     const now = gameSession.elapsed;
     const inVR = state.gl.xr.isPresenting;
@@ -173,7 +193,7 @@ export default function PlayerDragon({ dragon }: { dragon: DragonType }) {
     const pos = body.translation();
     Object.assign(playerPos, pos);
     _ray.origin = { x: pos.x, y: pos.y + 0.1, z: pos.z };
-    const hit = world.castRay(_ray, 250, true, undefined, undefined, undefined, body, collider => collider.parent()?.isFixed() ?? false);
+    const hit = world.castRay(_ray, 250, true, rapier.QueryFilterFlags.EXCLUDE_SENSORS, WORLD_ONLY, undefined, body);
     const groundY = hit ? pos.y + 0.1 - hit.timeOfImpact : 0;
     const minAltitude = 1.2;
     const altitudeAboveGround = pos.y - groundY;
@@ -203,26 +223,37 @@ export default function PlayerDragon({ dragon }: { dragon: DragonType }) {
 
     const baseMaxSpeed = 20 * s.speed;
     const requestedSpeed = (boostRef.current > 0 ? baseMaxSpeed * 2 : baseMaxSpeed) * settings.speedSensitivity;
-    const maxSpeed = inVR ? Math.min(12, requestedSpeed) : requestedSpeed;
+    const airborneSpeed = inVR ? Math.min(12, requestedSpeed) : requestedSpeed;
+    const maxSpeed = grounded && dy <= 0 && ability.type !== "updraft" ? Math.min(6 * s.speed, airborneSpeed) : airborneSpeed;
     if (boostRef.current > 0) dz = Math.min(dz, -0.75);
     visualGroupRef.current.rotation.y -= dx * 2.5 * s.agility * settings.turnSensitivity * delta;
     playerStatus.heading = visualGroupRef.current.rotation.y;
     const targetBank = rollRef.current > 0 ? (rollRef.current / Math.max(spec.duration, 0.1)) * Math.PI * 4 : -dx * Math.PI / 6;
     visualGroupRef.current.rotation.z = rollRef.current > 0 ? targetBank : damp(visualGroupRef.current.rotation.z, targetBank, 10, delta);
     const override = ability.type === "ground_slam" ? -60 : ability.type === "updraft" ? 40 * Math.min(1, ability.remaining / 0.25) : undefined;
-    const velocity = flightVelocity(body.linvel(), { forward: dz, climb: dy }, playerStatus.heading, maxSpeed, settings.climbSensitivity, altitudeAboveGround, delta, override);
+    const velocity = flightVelocity(actualVelocity.current, { forward: dz, climb: dy }, playerStatus.heading, maxSpeed, settings.climbSensitivity, altitudeAboveGround, delta, override);
     const tvx = velocity.x, fvy = velocity.y, tvz = velocity.z;
-    body.setLinvel(velocity, true);
+    Object.assign(desiredVelocity.current, velocity);
+    playerStatus.flightMode = flightMode(grounded, altitudeAboveGround, actualVelocity.current);
+    playerStatus.speed = Math.hypot(actualVelocity.current.x, actualVelocity.current.y, actualVelocity.current.z);
+
+    // Aim feedback and emitted shots share the same muzzle and central direction.
+    _muzzleOffset.set(0, 1.2, -3);
+    _muzzleEuler.set(0, playerStatus.heading, 0);
+    _muzzleOffset.applyEuler(_muzzleEuler);
+    _spawnPos.set(pos.x, pos.y, pos.z).add(_muzzleOffset);
+    // Do not let a long visual muzzle fire from the far side of a wall.
+    const muzzle = safeMuzzle(world, _muzzleRay, { x: pos.x, y: pos.y + 0.4, z: pos.z }, _spawnPos, rapier.QueryFilterFlags.EXCLUDE_SENSORS);
+    _spawnPos.set(muzzle.x, muzzle.y, muzzle.z);
+    Object.assign(aim.origin, { x: _spawnPos.x, y: _spawnPos.y, z: _spawnPos.z });
+    _fireVel.set(0, Math.sin(dy * 0.45) * 50 * atk.projectileSpeed, -Math.cos(dy * 0.45) * 50 * atk.projectileSpeed).applyEuler(_muzzleEuler).add(_inheritedVelocity.set(tvx, fvy, tvz)).normalize();
+    Object.assign(aim.direction, { x: _fireVel.x, y: _fireVel.y, z: _fireVel.z });
 
     // Fire is sampled from the active input; releasing F cannot latch the touch button.
     const wantsFire = inVR ? xrInput.fire : keys["f"] || joy.fire;
     if (wantsFire && now - lastFireTimeRef.current > 0.15 / s.firepower) {
       lastFireTimeRef.current = now;
       const ry = playerStatus.heading;
-      _muzzleOffset.set(0, 1.2, -3);
-      _muzzleEuler.set(0, ry, 0);
-      _muzzleOffset.applyEuler(_muzzleEuler);
-      _spawnPos.set(pos.x, pos.y, pos.z).add(_muzzleOffset);
       const angle = dy * 0.45;
       for (let i = 0; i < atk.count; i++) {
         const spread = atk.count > 1 ? -atk.spread / 2 + atk.spread / (atk.count - 1) * i : 0;
@@ -356,11 +387,13 @@ export default function PlayerDragon({ dragon }: { dragon: DragonType }) {
     <>
       <RigidBody
         ref={rbRef}
-        type="kinematicVelocity"
+        type="kinematicPosition"
         position={[0, 5, 0]}
         enabledRotations={[false, false, false]}
         colliders={false}
+        collisionGroups={PLAYER_GROUPS}
       >
+        <CapsuleCollider ref={colliderRef} args={[PLAYER_CAPSULE.halfHeight, PLAYER_CAPSULE.radius]} collisionGroups={PLAYER_GROUPS} />
         <group ref={visualGroupRef}>
           <primitive object={scene} />
         </group>

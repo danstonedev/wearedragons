@@ -41,7 +41,7 @@ function PlayerProjectile({ shot, remove }: { shot: PlayerShot; remove: (id: num
         const targetId = other.rigidBodyObject?.userData.targetId as string | undefined;
         const position = body.current?.translation();
         if (targetId) missionEmitter.dispatchEvent(new CustomEvent("tower_hit", { detail: { targetId, damage: 35 } }));
-        if (position) missionEmitter.dispatchEvent(new CustomEvent("impact", { detail: { position, color: shot.attack.color2 } }));
+        if (position) missionEmitter.dispatchEvent(new CustomEvent("impact", { detail: { position, color: shot.attack.color2, targetId } }));
         remove(shot.id);
       }}
     >

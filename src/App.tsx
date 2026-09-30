@@ -7,6 +7,7 @@ import type { Dispatch, SetStateAction } from "react";
 import PlayerDragon from "./world/PlayerDragon";
 import Projectiles, { EnemyProjectiles } from "./world/Projectiles";
 import Watchtower from "./world/Watchtower";
+import CombatFeedback from "./world/CombatFeedback";
 import { joy, pan, playerPos, playerStatus, abilityState, gameSession, missionEmitter } from "./game/runtime";
 import { useRef, useEffect, useMemo, useState, useCallback } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
@@ -15,6 +16,7 @@ import {
 } from "@react-three/drei";
 import {
   Physics,
+  CuboidCollider,
   RigidBody,
   RapierRigidBody,
 } from "@react-three/rapier";
@@ -196,7 +198,8 @@ function SmashableCastle() {
 
 function Terrain() {
   return (
-    <RigidBody type="fixed" friction={1}>
+    <RigidBody type="fixed" friction={1} colliders={false}>
+      <CuboidCollider args={[125, 0.5, 125]} position={[0, -0.5, 0]} />
       <Plane args={[250, 250]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
         <meshStandardMaterial color="#3f8a4b" />
       </Plane>
@@ -741,7 +744,8 @@ function OpenWorldTerrain() {
   return (
     <>
       {/* Physics plane + Pyrrhia base (green) */}
-      <RigidBody type="fixed" friction={1}>
+      <RigidBody type="fixed" friction={1} colliders={false}>
+        <CuboidCollider args={[200, 0.5, 200]} position={[0, -0.5, 0]} />
         <Plane args={[400, 400]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
           <meshStandardMaterial color="#3f8a4b" />
         </Plane>
@@ -1320,6 +1324,7 @@ function OpenWorldView({
           ))}
           <PlayerDragon dragon={dragon} />
           <Projectiles />
+          <CombatFeedback />
         </Physics>
         <RegionTracker onRegionChange={handleRegionChange} />
         <VRScene />
@@ -1572,6 +1577,7 @@ function GameWorld({
 
           <PlayerDragon dragon={dragon} />
           <Projectiles />
+          <CombatFeedback />
           {missionType !== "beacon_run" && missionType !== "jade_citadel" && (
             <EnemyProjectiles />
           )}

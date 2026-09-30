@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useFrame } from "@react-three/fiber";
 import { CuboidCollider, RigidBody } from "@react-three/rapier";
 import * as THREE from "three";
+import { Billboard } from "@react-three/drei";
 import { missionEmitter, playerPos, playerStatus, gameSession } from "../game/runtime";
 
 export default function Watchtower({
@@ -16,12 +17,14 @@ export default function Watchtower({
   const [alive, setAlive] = useState(true);
   const flash = useRef(0);
   const meshRef = useRef<THREE.Group>(null);
+  const healthRef = useRef<THREE.Mesh>(null);
   const lastShotRef = useRef(0);
 
   useFrame((_, frameDelta) => {
     if (destroyed.current || !meshRef.current) return;
     if (gameSession.paused) return;
     const now = gameSession.elapsed;
+    if (healthRef.current) { healthRef.current.scale.x = hpRef.current / 100; healthRef.current.position.x = -1.5 * (1 - hpRef.current / 100); }
     flash.current = Math.max(0, flash.current - frameDelta);
     meshRef.current.traverse(child => {
       const material = (child as THREE.Mesh).material as THREE.MeshStandardMaterial;
@@ -65,6 +68,7 @@ export default function Watchtower({
       flash.current = 0.12;
       if (hpRef.current <= 0) {
         destroyed.current = true;
+        missionEmitter.dispatchEvent(new CustomEvent("impact", { detail: { position: { x: position[0], y: position[1] + 4, z: position[2] }, color: "#ffb45b", large: true } }));
         setAlive(false);
         missionEmitter.dispatchEvent(
           new CustomEvent("tower_destroyed", { detail: { id } }),
@@ -73,13 +77,17 @@ export default function Watchtower({
     };
     missionEmitter.addEventListener("tower_hit", handleHit);
     return () => missionEmitter.removeEventListener("tower_hit", handleHit);
-  }, [id]);
+  }, [id, position]);
 
   if (!alive) return null;
   return (
     <RigidBody type="fixed" colliders={false} position={position} userData={{ targetId: id }}>
     <CuboidCollider args={[1.6, 4, 1.6]} position={[0, 4, 0]} />
     <group ref={meshRef}>
+      <Billboard position={[0, 10, 0]}>
+        <mesh><planeGeometry args={[3.2, 0.35]} /><meshBasicMaterial color="#13232b" /></mesh>
+        <mesh ref={healthRef} position={[0, 0, 0.01]}><planeGeometry args={[3, 0.22]} /><meshBasicMaterial color="#ffb45b" /></mesh>
+      </Billboard>
       {/* Stone base */}
       <mesh castShadow receiveShadow position={[0, 2, 0]}>
         <boxGeometry args={[3, 4, 3]} />

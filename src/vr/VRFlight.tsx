@@ -91,7 +91,7 @@ export function VRFlightRig({ mission, missionState }: { mission?: MissionDefini
     ctx.textAlign = "center";
     ctx.fillStyle = "#f0deaa";
     ctx.font = "bold 36px sans-serif";
-    ctx.fillText(gameSession.paused ? "PAUSED · X: RESUME · Y: EXIT" : mission?.name ?? "FREE FLIGHT", 512, 55);
+    ctx.fillText(gameSession.paused ? "PAUSED · X: RESUME · Y: EXIT" : `${mission?.name ?? "FREE FLIGHT"} · ${playerStatus.flightMode.toUpperCase()}`, 512, 55);
     const objective = mission?.objectives[missionState?.activeObjectiveIndex ?? 0];
     ctx.fillStyle = "#ffffff";
     ctx.font = "28px sans-serif";

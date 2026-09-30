@@ -12,7 +12,13 @@ AI coding can accelerate implementation, refactoring, test coverage, profiling t
 - Work included source review of the player, controls, materials, animation, mission reducers, tower combat, projectile simulation, world assembly, castle destruction, settings, packaging, and deployment configuration.
 - The baseline production build succeeded. Baseline lint reported 33 errors and one warning, and the repository had no automated game tests.
 - The cloud browser could navigate the deployed selection and mission menus, but its GPU/WebGL was disabled. Local preview URLs were also blocked by that browser. **Rendered flight, the new atmosphere, real controller sessions, frame rates, and VR comfort were not validated.**
-- The first implementation pass now passes 24 automated tests, lint, and a production build. Tests include real Rapier WASM collisions and parsing/animating the actual dragon GLB. They do not substitute for an end-to-end rendered playtest.
+- The current branch now passes 34 automated tests, lint, and a production build. Tests include real Rapier WASM collisions and parsing/animating the actual dragon GLB. They do not substitute for an end-to-end rendered playtest.
+
+## Second-pass implementation update
+
+The review branch now adds collision-aware flight, flight-mode/speed feedback, world-space aim guidance, tower health bars, bounded instanced impact/destruction bursts, and desktop hit confirmations. Muzzle origins are clipped to the player side of walls so the visual dragon neck cannot let shots spawn behind blocking geometry. Aim guidance indicates the initial shot direction including inherited flight velocity; it is not a ballistic prediction for gravity/spread attacks.
+
+Rapier is now an explicit dependency pinned to `0.19.2`, matching React Three Rapier. Earlier test resolution picked up an older `0.12.0` package from Three's type dependencies. A regression test checks that the test suite and runtime resolve the same package, and the existing projectile checks were rerun on the correct engine. New real-world tests cover thin walls across 30/60/72/120 Hz, wall sliding, corner escape, floor landing/takeoff, ceilings, sensor/friendly-shot filtering, and blocked/unblocked muzzle origins. The suite has 34 tests. Rendered and headset validation remain outstanding.
 
 ## What already exists
 
@@ -59,7 +65,7 @@ The large player/projectile/tower code blocks were extracted from `App.tsx` into
 
 Build explicit grounded, takeoff, cruise, glide, dive, and landing states. Keep forgiving arcade controls, but make speed, altitude, turning radius, and stamina interact. Banking should help a turn; a dive should build speed; flapping should spend a resource; a clean landing should feel intentional. Tune desktop and VR camera behavior separately.
 
-The current player still has `colliders={false}` on a velocity-driven kinematic body. It can pass through world obstacles. **Do not fix this by merely adding a collider to that body:** kinematic motion needs a deliberate sweep/slide or character-controller solution to stop against fixed geometry. Introduce a capsule/hull sweep, match terrain collision to visible geometry, and test high-speed contacts, wall sliding, steep slopes, ceiling impacts, and landing before adding cliffs or narrow tunnels.
+The second pass replaces velocity-only movement with an explicit capsule and a position-based Rapier character controller. Each physics step sweeps the requested movement before applying it, with wall sliding, ground/ceiling blocking, no ground snap during takeoff, and a four-unit per-step travel bound for extreme commands. Grounded motion is slower and flight modes are shown in the desktop/headset HUD. Terrain now has explicit solid floor colliders. Decorative forests and region props still need collision geometry, and camera obstruction, slope tuning, glide/stamina mechanics, and full flight-state transitions remain future work.
 
 Completion criteria: a five-minute route feels controllable at 30/60/120 Hz desktop and the chosen headset rate; the dragon cannot tunnel through a tower or mountain; takeoff and landing are readable; flight still works with keyboard, touch, and Quest controllers.
 
@@ -89,7 +95,7 @@ Give projectiles explicit collision groups and bounded counts; this pass does bo
 | Quest browser | 72 Hz → 13.9 ms per frame | Initial target when the headset supports it; verify sustained performance after warming the device |
 | Quest renderer in this pass | DPR 1, 1024 shadow map, requested framebuffer scaling 0.8 and maximum foveation | Conservative initial settings; actual device behavior varies |
 | Selection previews | DPR capped at 1.25, or the lower device limit | Reduce rendering cost; replace multiple active canvases with one shared renderer or static thumbnails in a later pass |
-| Bundle | Production app entry about 91 KB before compression in this build; large Three/Drei/Rapier shared chunks remain | File size evidence only; no FPS claim |
+| Bundle | Production app entry about 97 KB before compression in this build; large Three/Drei/Rapier shared chunks remain | File size evidence only; no FPS claim |
 | Optional XR | About 72 KB entry plus dependencies; loaded only after positive immersive support detection | The library also emits emulator/room chunks; emulation is disabled, so those rooms are not intended runtime downloads |
 
 Inspect Chrome/Quest performance traces and Three renderer counts during flight, firing, tower combat, and destruction. Record CPU time, GPU time where available, draw calls, triangles, active physics bodies, heap growth, load time, and long frames. Choose budgets from those measurements. Avoid hiding performance problems by only lowering resolution.
@@ -134,6 +140,6 @@ Avoid a giant open-world rewrite, multiplayer, procedural quest generation, and 
 
 ## Automated validation in this branch
 
-`npm test` runs 24 tests covering concurrent mission progress, duplicate events, sequential objectives, survival waves, timeout/terminal state, retries, healing and invalid damage, stars, refresh-independent damping, acceleration/braking, ground clearance, ability persistence, swept projectile hits, corrupt settings, controller mappings/deadzones/press edges, input reset, real Rapier CCD at multiple speeds/timesteps, overlapping multi-shot collision groups, GLB material ownership, and independent bone animation.
+`npm test` runs 34 tests covering concurrent mission progress, duplicate events, sequential objectives, survival waves, timeout/terminal state, retries, healing and invalid damage, stars, refresh-independent damping, acceleration/braking, ground clearance, ability persistence, swept projectile hits, corrupt settings, controller mappings/deadzones/press edges, input reset, real Rapier CCD at multiple speeds/timesteps, overlapping multi-shot collision groups, GLB material ownership, and independent bone animation.
 
 `npm run lint` passes. The immutability rule is scoped off only for R3F components that mutate owned Three/Rapier objects; the remaining hooks, dependency, purity, and state rules remain enabled. `npm run build` passes TypeScript and produces the deployable Vite bundle. No new rendered-browser or headset test has been claimed.
