@@ -116,12 +116,7 @@ export default function Watchtower({
         <sphereGeometry args={[0.42, 12, 10]} />
         <meshBasicMaterial color="#ff6b24" />
       </mesh>
-      <pointLight
-        position={[0, 8.9, 0]}
-        color="#ff6600"
-        intensity={3}
-        distance={15}
-      />
+
     </group>
     </RigidBody>
   );

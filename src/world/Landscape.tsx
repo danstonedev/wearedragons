@@ -3,6 +3,7 @@ import { RigidBody, TrimeshCollider } from "@react-three/rapier";
 import * as THREE from "three";
 import { createTerrainSurface, terrainHeight } from "../game/landscape";
 import type { LandscapeKind } from "../game/landscape";
+import { renderingBudget } from "../game/rendering";
 import { device } from "../utils/device";
 
 function groundRelief() {
@@ -20,6 +21,9 @@ function groundRelief() {
   texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
   texture.repeat.set(28, 28);
   texture.colorSpace = THREE.NoColorSpace;
+  texture.magFilter = THREE.LinearFilter;
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.generateMipmaps = true;
   texture.needsUpdate = true;
   return texture;
 }
@@ -44,7 +48,7 @@ function groundColor(x: number, z: number, y: number, kind: LandscapeKind, slope
 
 export default function Landscape({ kind }: { kind: LandscapeKind }) {
   const size = kind === "ridge" ? 250 : 400;
-  const divisions = device === "quest" || device === "mobile" ? 80 : kind === "ridge" ? 112 : 120;
+  const divisions = renderingBudget(device).terrainDivisions;
   const { surface, geometry } = useMemo(() => {
     const surface = createTerrainSurface(kind, size, divisions);
     const geometry = new THREE.BufferGeometry();

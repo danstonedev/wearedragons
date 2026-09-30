@@ -55,6 +55,14 @@ Flight now accelerates and brakes smoothly, with capsule sweeps against physical
 
 ## Development guide
 
+### Graphics and render stability
+
+Instanced forests, rocks, grass, and mountains now refresh their bounding volumes after placement; cached bounds near the origin could otherwise cull an entire distant batch. Skinned dragon meshes remain visible through wing animations. Wings use a single transparent pass without writing depth, with shared membrane folds; body scales also vary roughness. Curved horns, shaped fins, rounded armor, and eroded ridgelines replace sharper primitive profiles. These are procedural improvements to the existing asset set, not replacement authored character models.
+
+Gameplay uses a stable sun/hemisphere light set with emissive markers instead of adding and removing point lights during objectives. All phones, tablets, and Quest use fewer plants, clouds, grass, and terrain divisions; dynamic shadows are reserved for desktop at 1024 resolution. Water uses an opaque standard material to reduce transparency cost. Desktop/touch pixel density adapts after sustained five-second timing windows. Quest uses fixed resolution plus maximum WebXR foveation where supported; adaptive pixel density does not change an active XR session.
+
+Render checks: fly away from the spawn and rotate through a full circle near forests and mountains; repeat at altitude and during dragon animations. Destroy towers and pass race gates while checking for stalls. Repeat for at least five minutes on the affected device. The culling bug is reproduced in automated tests, but the reported scene cutouts and actual FPS still require on-device confirmation.
+
 ### Flight feel
 
 Powered flight now carries momentum through turns. Agile dragons redirect faster; heavier dragons take wider approaches. Diving increases forward speed, while climbing reduces it. Hold **G** to glide or **B** to airbrake; touch players have matching hold buttons. Quest uses **right grip for glide** and **left grip for brake**. Glide gradually loses speed and altitude, with gentle steering and existing collision/ground clearance protection. Desktop/touch cameras widen their view slightly at speed; headset view and the twelve-unit horizontal speed cap remain steady.

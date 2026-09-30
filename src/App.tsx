@@ -5,6 +5,8 @@ import Landscape from "./world/Landscape";
 import Vegetation from "./world/Vegetation";
 import WorldDetails from "./world/WorldDetails";
 import FlightHUD from "./components/FlightHUD";
+import RenderQuality from "./components/RenderQuality";
+import { renderingBudget } from "./game/rendering";
 import { useWorldSession } from "./game/useWorldSession";
 import type { Dispatch, SetStateAction } from "react";
 import PlayerDragon from "./world/PlayerDragon";
@@ -58,7 +60,7 @@ import { useGuardianProgress } from "./game/useGuardianProgress";
 import { nextCampaignMission } from "./game/progression";
 import { WORLD_REGIONS, getRegionAtPos } from "./game/worlds";
 import type { WorldRegion } from "./game/worlds";
-import { preset, isTouchDevice } from "./utils/device";
+import { device, preset, isTouchDevice } from "./utils/device";
 
 
 function Forest() { return <Vegetation kind="ridge" />; }
@@ -199,14 +201,7 @@ function BeaconObj({
           metalness={0.5}
         />
       </mesh>
-      {active && (
-        <pointLight
-          position={[0, 10, 0]}
-          color="#ffd700"
-          intensity={8}
-          distance={30}
-        />
-      )}
+
       <mesh position={[0, 10, 0]}>
         <dodecahedronGeometry args={[0.68, 1]} />
         <meshStandardMaterial color={active ? "#fff0a6" : "#292c2b"} emissive={active ? "#ffd700" : "#000"} emissiveIntensity={active ? 2 : 0} roughness={0.35} />
@@ -657,12 +652,7 @@ function WorldBeacon({
           opacity={0.55}
         />
       </mesh>
-      <pointLight
-        position={[0, 10, 0]}
-        color={discovered ? region.beaconColor : region.color}
-        intensity={discovered ? 12 : 3}
-        distance={discovered ? 50 : 28}
-      />
+
     </group>
   );
 }
@@ -914,10 +904,11 @@ function OpenWorldView({
     >
       <SceneBoundary>
       <Canvas
-        shadows={{ type: THREE.PCFShadowMap }}
+        shadows={renderingBudget(device).shadows ? { type: THREE.PCFShadowMap } : false}
         camera={{ position: [0, 5, 10], fov: 60 }}
-        dpr={[1, preset.maxDpr]}
+        dpr={[renderingBudget(device).minDpr, renderingBudget(device).maxDpr]}
       >
+        <RenderQuality />
         <Atmosphere region={currentRegion.id} />
         <MissionTimer />
         <Physics debug={false} paused={paused}>
@@ -1146,10 +1137,11 @@ function GameWorld({
     >
       <SceneBoundary>
       <Canvas
-        shadows={{ type: THREE.PCFShadowMap }}
+        shadows={renderingBudget(device).shadows ? { type: THREE.PCFShadowMap } : false}
         camera={{ position: [0, 5, 10], fov: 60 }}
-        dpr={[1, preset.maxDpr]}
+        dpr={[renderingBudget(device).minDpr, renderingBudget(device).maxDpr]}
       >
+        <RenderQuality />
         <Atmosphere region={mission.region} />
         <MissionTimer onTick={handleTimerTick} />
         <Physics debug={false} paused={paused}>
