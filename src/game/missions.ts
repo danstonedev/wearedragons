@@ -90,7 +90,7 @@ export const MISSIONS: MissionDefinition[] = [
     name: "Sky Circuit",
     description: "Race through aerial checkpoints before the storm closes in.",
     briefing:
-      "A storm front is approaching fast. Fly through all 8 checkpoint rings scattered across the valley before the skies go dark. Speed and pathing are everything.",
+      "A storm front is approaching fast. Fly through all 8 checkpoint rings scattered across the valley before the skies go dark. Follow the approach lights and cross the bright cyan ring; the next gate lights up as you pass. A clean route earns three stars in 45 seconds. If you miss a gate, turn back and cross it from either side.",
     region: "pyrrhia",
     type: "beacon_run",
     timeLimitSeconds: 90,

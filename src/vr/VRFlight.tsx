@@ -29,7 +29,7 @@ export function VRLaunch() {
       resetInput();
       void xrStore.enterVR().catch(() => setError("VR could not start. Check headset permissions and try again."));
     }}>ENTER VR · EXPERIMENTAL</button>
-    <span>Left stick: speed · Right stick: climb / snap turn · Right trigger: fire · Left trigger: special · X: pause · Y: exit</span>
+    <span>Left stick: speed · Right stick: climb / snap turn · Right trigger: fire · Left trigger: special · Left grip: brake · Right grip: glide · X: pause · Y: exit</span>
     {error && <span role="alert">{error}</span>}
   </div>;
 }
@@ -71,6 +71,8 @@ export function VRFlightRig({ mission, missionState }: { mission?: MissionDefini
     xrInput.throttle = enabled ? controls.throttle : 0;
     xrInput.climb = enabled ? controls.climb : 0;
     xrInput.fire = enabled && controls.fire;
+    xrInput.glide = enabled && controls.glide;
+    xrInput.brake = enabled && controls.brake;
     xrInput.special = enabled && edges.special;
     xrInput.snapYaw = enabled && edges.snap ? -Math.sign(controls.snap) * Math.PI / 4 : 0;
     previous.current = edges.next;
@@ -100,7 +102,7 @@ export function VRFlightRig({ mission, missionState }: { mission?: MissionDefini
     ctx.fillText(`${missionState ? `HP ${Math.ceil(missionState.playerHp)} · ` : ""}${abilityState.label}: ${abilityState.cooldownLeft > 0 ? `${abilityState.cooldownLeft.toFixed(1)}s` : "READY"}${mission?.timeLimitSeconds ? ` · ${Math.ceil(Math.max(0, mission.timeLimitSeconds - (missionState?.elapsedTime ?? 0)))}s left` : ""}`, 512, 168);
     ctx.fillStyle = "#b7c6d1";
     ctx.font = "23px sans-serif";
-    ctx.fillText("Left stick: speed · Right stick: climb / snap turn · Triggers: special / fire", 512, 221);
+    ctx.fillText("Sticks: speed / climb · Triggers: special / fire · Grips: brake / glide", 512, 221);
     panel.texture.needsUpdate = true;
   });
   if (!session) return null;
