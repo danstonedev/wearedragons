@@ -1,654 +1,115 @@
-# We Are Dragons Gameplay Roadmap
+# We Are Dragons — game design and upgrade plan
 
-> Historical design plan. The prototype now includes four missions, tower enemies, health, failure/results, and star ratings, so the original current-state statements below no longer describe the repository. Use [the modernization audit](modernization-audit.md) for the current evidence, fixes, priorities, and desktop/Quest validation gates. The narrative and campaign ideas here remain useful future design material.
+## Direction
 
-## Purpose
+**Become a sky guardian: master your dragon, reclaim dangerous routes, and restore the beacon network.**
 
-This document turns the current prototype into an implementation plan.
+The first release should deliver a satisfying 15–30 minute campaign with short missions worth replaying. Flight is the central toy. Combat, exploration, scenery, and rewards should make players want to fly again.
 
-It is written for the game that exists today:
-- dragon selection with strong tribe identity
-- free-flight sandbox
-- ranged attacks and specials
-- destructible castle toy target
-- no mission structure, enemies, progression, or story state yet
+### Design pillars
 
-The goal is to build a small, fun dragon action game in phases without overcommitting too early.
+1. **Expressive flight.** Turning, altitude, approaches, and dragon choice produce visible consequences. Beginners can recover from mistakes; experts chase cleaner routes.
+2. **Readable threats and goals.** A player can identify the next objective and enemy tell while moving. VR uses cues in the world as well as a comfortable HUD.
+3. **Distinct dragon roles.** Speed, armor, attack pattern, and special ability support different tactics. All roster choices remain viable.
+4. **A world worth restoring.** Beacons and settlements visibly respond to progress. Environmental composition provides routes, shelter, and recognizable destinations.
+5. **Reward mastery.** Records, personal improvement, and earned cosmetic identity motivate replay. Avoid grinding for basic controls or mandatory stat upgrades.
 
-## Product Direction
+## Current evidence
 
-### High-Level Pitch
+The game has fifteen dragons, four missions, three free-flight regions, tower combat, a flying scout, destructible masonry, special abilities, results and star ratings. Flight uses collision sweeps and bounded acceleration. The environment has shared render/collision terrain, instanced vegetation, mountain silhouettes, cloud/water motion, and rebuilt architecture. Composite dragon details follow the shared skeleton.
 
-`We Are Dragons` is a mission-based aerial action game where the player chooses a dragon, masters its tribe-specific strengths, and restores failing sky-beacons across three regions before the skies collapse into conflict.
+The asset set remains a prototype. Automated physics and animation tests are useful, but rendered desktop and headset playtesting has not yet established visual quality, comfort, accessibility, or sustained performance. The current environments are not photorealistic.
 
-### Design Pillars
+## Player experience
 
-1. Flight is the main fantasy.
-2. Dragon choice should change how missions feel.
-3. Missions should be short, readable, and replayable.
-4. Story should support action, not slow it down.
+### First session
 
-### What The Current Prototype Does Well
+1. Choose an appealing dragon and see its role in plain language.
+2. Learn forward flight, altitude control, braking, firing, and the special in a forgiving space.
+3. Clear Beacon Ridge: read tower fire, deal with the scout, and activate the beacon.
+4. Receive stars, a saved record, and a clear next chapter.
+5. Fly Sky Circuit to learn clean approaches, then defend the ridge and break the citadel.
+6. Return with another dragon or improve a record.
 
-- Immediate dragon fantasy
-- Distinct dragon roster
-- Strong selection screen presentation
-- Good sandbox feel for movement and attacks
+### Repeat session
 
-### Current Gaps
+Choose a highlighted unfinished mission, improve a two-star result, or build mastery with another dragon. Free flight provides an unhurried alternative. A short session should still leave a lasting achievement.
 
-- No objective
-- No failure state
-- No enemy pressure
-- No reward loop
-- No campaign structure
-- No story framing after selection
+## Playable slice delivered in this revision
 
-## Target Game Shape
+### Guardian log
 
-The project should become a mission-driven action game, not a giant open-world game.
+- Save successful mission records on the current browser/device.
+- Preserve best stars, fastest clear, highest remaining HP, and clear count independently.
+- Track best stars for each mission/dragon combination; mastery is the sum, capped at twelve stars per dragon.
+- Mastery titles: New bond (0), Wing Scout (1–5), Pathfinder (6–11), Sky Guardian (12).
+- Highlight the first uncleared chapter in the existing mission order; never lock practice behind progress.
+- Offer the next chapter from the victory screen and show an actionable three-star target.
+- Handle damaged saves and unavailable storage without blocking play. Saves are local, not account/cloud sync.
 
-Target session loop:
+### Sky Circuit
 
-1. Choose a dragon.
-2. Read a short mission brief.
-3. Enter a compact combat/traversal arena.
-4. Complete a goal using movement, attacks, and dragon-specific strengths.
-5. Earn progress toward region recovery, unlocks, or tribe favor.
-6. Advance the story to the next mission.
+- Orient each ring perpendicular to its incoming route; do not rotate the crossing plane.
+- Emphasize the active gate with a cyan ring, pulsing outer halo, and approach lights.
+- Register a crossing through the gate plane using the swept movement segment, including fast flight between frames.
+- Allow recovery by crossing from either side. Flying near a ring without crossing its plane does not count.
+- Preserve the eight-gate route, ninety-second limit, and existing star goals until playtests justify retuning.
 
-## Narrative Frame
+## Prioritized production backlog
 
-### Premise
+| Priority | Upgrade | Player benefit | Completion evidence |
+| --- | --- | --- | --- |
+| 1 | First-flight tutorial with contextual prompts and practice targets | Learn controls and recover without reading a wall of text | A new player flies, brakes, fires, and uses a special unaided within three minutes on desktop and Quest |
+| 2 | Flight feel: glide, banking, dive energy, landing response | Flying is enjoyable between encounters | Five-minute route feels controllable; tuning tested with fast/heavy/agile dragons; camera comfort retained |
+| 3 | Combat encounters: cover, scout variants, readable shot lanes | Tactical movement instead of circling stationary targets | Two viable approaches per encounter; each threat has a visible tell and counterplay |
+| 4 | Beacon restoration effects and saved exploration discoveries | Success changes the world | Return visits show restored landmarks; discovery remains after reload |
+| 5 | Hero environment and creature art | A coherent, convincing place and dragon | One authored valley and hero dragon inspected at player-camera distance, in motion, on desktop and headset |
+| 6 | Pantala rescue mission | A new verb and regional purpose | Locate survivor, clear threat, escort to safety; legible failure/retry conditions |
+| 7 | Regional finale with elite aerial enemy | A satisfying campaign culmination | Multi-phase encounter with clear tells, recovery windows, and dragon-role viability |
+| 8 | Cosmetic mastery rewards and optional route modifiers | Long-term personal goals | Earned rewards displayed on selection and in play; no required damage grind |
 
-The ancient sky-beacons that maintain safe routes between dragon territories are failing. Storms are spreading, raiders are emboldened, and long-buried relics are reactivating. The player is a newly chosen sky guardian able to bond with dragons from multiple tribes and travel between regions to restore the beacon network.
+Priorities 2–5 can iterate together after tutorial feedback. A feature is not complete merely because it compiles.
 
-### Why This Premise Works
+## Flight and physics design
 
-- Justifies multiple tribes and dragon swapping
-- Gives the player a reason to travel and fight
-- Creates natural mission objectives
-- Supports progression from local problems to a larger threat
+Preserve forgiving arcade control while adding intentional decisions. Introduce glide as reduced propulsion with gradual altitude loss; dives trade altitude for speed and climbs spend that speed. Banking should communicate a turn before introducing any mechanical bonus. Landings should settle reliably on slopes, with a brief visual response and no headset camera roll.
 
-### Story Arc
+Prototype energy and glide with one dragon first. Avoid adding a stamina bar until depletion creates an enjoyable choice in playtests. Keep control mappings consistent across keyboard, touch, and Quest. Surface controls in the relevant mode. Fix camera obstruction and spawn safety before tightening obstacle difficulty.
 
-#### Act 1: First Flight
+## Combat and mission design
 
-- Choose a dragon
-- Learn movement and combat
-- Restore the first beacon
-- Discover the failures are coordinated
+Each encounter needs an entry view, primary threat, alternate approach, safe recovery space, and climax. Towers constrain lanes; scouts force repositioning; structures reward heavy attacks. Avoid opaque hits, instant damage, and multiplying enemies solely to increase difficulty.
 
-#### Act 2: Fractured Skies
+Beacon Ridge teaches combat. Sky Circuit teaches route control. Ridge Defense teaches threat prioritization. Jade Citadel teaches attack positioning and destructive payoff. Add story debriefs that explain how each success reconnects the network. Use three-star goals to encourage expertise; do not require three stars to advance.
 
-- Travel to new regions
-- Earn trust from different tribes
-- Solve region-specific problems
-- Uncover the force behind the beacon collapse
+## Art overhaul plan
 
-#### Act 3: The Final Beacon
+Choose grounded fantasy realism with strong silhouettes and restrained color. Start with one hero valley rather than spreading asset effort across an enormous world. Compose a visible beacon, a readable route, sheltered clearings, layered cliffs, and distant ridgelines. Match scale across trees, towers, terrain, and dragons.
 
-- Choose alliances
-- Restore the final network
-- Defeat an elite dragon, warlord, or awakened sky-engine
+Production sequence:
 
-## First Playable Campaign Slice
+1. Gather approved visual references and establish a palette, scale sheet, material list, and camera-distance targets.
+2. Build a hero dragon with authored anatomy, wing membranes, facial detail, scale normals, and controlled roughness. Preserve a tested skeleton/animation pipeline.
+3. Build a modular cliff/rock set and richer ground materials; terrain collision must still agree with the rendered surface.
+4. Replace foliage clusters with authored foliage, distance LOD, and subtle wind appropriate for headset budgets.
+5. Add beacon restoration lighting, curated sky/fog, spatial wingbeat/wind/combat audio, and restrained effects.
+6. Derive a Quest tier from measured frame timing, draw calls, memory, and transparency cost. Keep the same readable objectives.
 
-This is the first slice the team should build before expanding content.
+Bone-attached primitives are interim silhouette differentiation. Bump relief does not replace authored topology or textures. Any external asset must have a recorded source and license. Do not promise photorealism from extra polygon counts alone.
 
-### Player Experience: First 30 Minutes
+## Playtest gates
 
-1. Opening text or lightweight cutscene explains the beacon crisis.
-2. Player selects a dragon from the current dragon select screen.
-3. Tutorial mission teaches flight, firing, and special ability use.
-4. First combat mission tasks the player with destroying raider watchtowers near a damaged beacon.
-5. Debrief reveals the raid was intentional, not random.
-6. Second mission shifts tone with either a rescue or race/traversal challenge.
-7. Player unlocks the next mission set, dragon, or region.
-
-### First Vertical Slice Goal
-
-Build one polished mission:
-
-`Destroy 3 raider watchtowers, survive return fire, then fly through the beacon to reactivate it.`
-
-This single mission should answer:
-- Is the flight fun under pressure?
-- Are attacks readable against real targets?
-- Is the HUD understandable?
-- Does dragon choice create interesting advantages?
-- Does success feel meaningful?
-
-## Core Gameplay Loops
-
-### Moment-To-Moment Loop
-
-1. Fly
-2. Aim
-3. Dodge
-4. Fire
-5. Use special
-6. Avoid hazards or enemy attacks
-
-### Mission Loop
-
-1. Receive objective
-2. Reach encounter area
-3. Complete primary objective
-4. Handle escalation
-5. Escape, survive, or activate beacon
-6. Receive rewards and story update
-
-### Campaign Loop
-
-1. Clear missions in a region
-2. Restore beacon strength
-3. Improve tribe reputation
-4. Unlock new dragons, missions, or modifiers
-5. Advance the story to the next region
-
-## Dragon Identity Plan
-
-The dragon roster in `src/dragons.ts` should remain the base of gameplay identity.
-
-### Design Rule
-
-Every dragon should be:
-- generally viable in all core content
-- clearly better at certain mission patterns
-- different because of playstyle, not just numbers
-
-### Intended Gameplay Niches
-
-| Dragon Type | Best At | Notes |
+| Test | Observe | Pass condition |
 | --- | --- | --- |
-| MudWing | Siege, defense, tanking | High armor, good for turret-heavy missions |
-| SandWing | Burst movement, hit-and-run | Great for timed objectives |
-| SkyWing | Chases, speed trials, interception | Best high-speed traversal pick |
-| SeaWing | area control, pulse utility | Good for beacon resonance and crowd control |
-| IceWing | precision combat, control | Good against airborne targets and narrow routes |
-| RainWing | stealth, ambush, infiltration | Cloak should matter in mission scripting |
-| NightWing | stealth plus balanced combat | Flexible all-rounder |
-| HiveWing | swarm attacks, pressure | Good anti-group pick |
-| SilkWing | mobility tricks, evasion | Barrel roll should reward skillful play |
-| LeafWing | support, sustain, defense | Heal becomes relevant once HP exists |
-| RiceWing | speed and finesse | Strong race option |
-| AceWing | acrobatics, challenge runs | High skill ceiling movement pick |
-| BladeWing | armored offense | Durable close-approach attacker |
-| BoneWing | heavy destruction | Great against structures and bosses |
-| HiveWing II | stealth venom hybrid | Exists as `hivewing2` in Glaeryus tribe, cloak + venom kit |
+| Fresh player, desktop | First objective, controls, failure reason | Understands objective within ten seconds; can retry without help |
+| Quest first session | Controller discovery, HUD readability, orientation | Player can launch, fly, fire, pause, and exit comfortably |
+| Sky Circuit | Gate approaches, missed-gate recovery, fast crossing | Crossing matches visible gate; player understands where to go next |
+| Replay and reload | Records, next chapter, different dragon | Best results survive reload and worse replays never erase them |
+| Busy combat scene | Threat tells, collision, rendering | No unexplained hits or tunneling; frame budget measured on target hardware |
+| Five-minute free flight | Camera, comfort, landmarks | No forced camera pitch/roll; navigation remains understandable |
 
-## Mission Types
+Track completion rate, time to first shot, missed gates, retry choice, dragon changes, and reported comfort in a small opt-in test sheet before adding analytics infrastructure. Balance numbers from observed attempts rather than guessed precision.
 
-The game should ship early with a small set of repeatable mission structures.
+## Deferred scope
 
-### Mission Type 1: Fortress Raid
-
-Objective:
-- destroy structures, towers, crystals, gates, or artillery
-
-Player verbs emphasized:
-- firing
-- target prioritization
-- strafing
-- health management
-
-Good dragon fits:
-- MudWing
-- BoneWing
-- SkyWing
-
-### Mission Type 2: Beacon Run
-
-Objective:
-- race through airborne markers under a timer and activate a beacon
-
-Player verbs emphasized:
-- speed
-- pathing
-- altitude control
-- boost timing
-
-Good dragon fits:
-- SkyWing
-- SandWing
-- RiceWing
-- AceWing
-
-### Mission Type 3: Rescue Mission
-
-Objective:
-- find trapped dragons, destroy blockers, escort survivors, or defend a route
-
-Player verbs emphasized:
-- scanning
-- quick repositioning
-- wave defense
-- survivability
-
-Good dragon fits:
-- LeafWing
-- MudWing
-- RainWing
-
-### Mission Type 4: Hunter Ambush
-
-Objective:
-- survive waves of enemies or defeat an elite target
-
-Player verbs emphasized:
-- combat mastery
-- dodging
-- cooldown timing
-- target focus
-
-Good dragon fits:
-
-- NightWing
-- IceWing
-- HiveWing
-- BladeWing
-
-### Mission Type 5: Storm Trial
-
-Objective:
-
-- cross dangerous weather zones, turbulence rings, or lightning corridors
-
-Player verbs emphasized:
-
-- movement mastery
-- reading space
-- precise control
-
-Good dragon fits:
-
-- AceWing
-- SilkWing
-- SkyWing
-- RiceWing
-
-## Phased Implementation Plan
-
-## Phase 1: Vertical Slice
-
-### Goal
-
-Turn the sandbox into a complete, replayable mission.
-
-### Required Features
-
-- player health
-- mission state machine
-- destructible mission targets
-- simple enemy threat
-- objective HUD
-- success and failure screens
-- mission reset
-- story intro and debrief text
-
-### Scope
-
-Build exactly one mission on the existing map:
-- 3 watchtowers
-- 1 beacon activation finish
-- 1 mission success flow
-- 1 mission fail flow
-
-### Out Of Scope
-
-- region map
-- long dialog scenes
-- multiple environments
-- progression trees
-- save system
-
-### Acceptance Criteria
-
-- Player can take damage and fail.
-- Watchtowers can be destroyed and tracked.
-- Mission objective updates on screen.
-- Completing all towers unlocks the beacon end goal.
-- Reaching the beacon after tower destruction triggers mission complete.
-- Death or health depletion triggers mission fail.
-- Player can retry without reloading the app.
-
-## Phase 2: Combat And Mission Variety
-
-### Goal
-
-Prove that the game stays fun beyond a single mission.
-
-### Required Features
-
-- at least 3 mission templates
-- enemy waves or turret variants
-- mission timer support
-- dragon-specific strengths reflected in mission tuning
-- basic rewards or stars system
-
-### Acceptance Criteria
-
-- There are at least 3 distinct mission types.
-- At least 2 dragon choices feel meaningfully different in the same mission.
-- Mission completion grants a visible reward or rating.
-
-## Phase 3: Campaign Structure
-
-### Goal
-
-Connect missions into a progression arc.
-
-### Required Features
-
-- region selection or campaign map
-- mission unlock flow
-- story brief/debrief system
-- tribe reputation or region recovery meter
-- dragon unlocks or mastery unlocks
-
-### Acceptance Criteria
-
-- Player can complete missions in sequence.
-- Story context changes after mission completion.
-- Some new content unlocks from progress.
-
-## Phase 4: Expansion
-
-### Goal
-
-Increase depth after the core loop is proven.
-
-### Candidate Features
-
-- bosses
-- elite enemy dragons
-- biome-specific hazards
-- branching story choices
-- region-specific mission modifiers
-- deeper progression
-
-## Systems Spec
-
-These systems should be implemented in a lightweight way first.
-
-### 1. Game State Flow
-
-Add an app-level flow:
-
-- `dragon_select`
-- `mission_brief`
-- `in_mission`
-- `mission_success`
-- `mission_fail`
-
-This replaces the current immediate jump from selection to sandbox play.
-
-### 2. Mission State
-
-Add a mission definition object and runtime mission progress state.
-
-Suggested structure:
-
-```ts
-type AppScreen =
-  | "dragon_select"
-  | "mission_brief"
-  | "in_mission"
-  | "mission_success"
-  | "mission_fail";
-
-type MissionObjectiveType =
-  | "destroy_targets"
-  | "reach_beacon"
-  | "survive"
-  | "race_checkpoint";
-
-interface MissionDefinition {
-  id: string;
-  name: string;
-  description: string;
-  region: "pyrrhia" | "pantala" | "glaeryus";
-  objectives: MissionObjectiveDefinition[];
-  recommendedDragons?: string[];
-}
-
-interface MissionObjectiveDefinition {
-  id: string;
-  type: MissionObjectiveType;
-  label: string;
-  requiredCount?: number;
-}
-
-interface MissionRuntimeState {
-  activeObjectiveId: string;
-  progress: Record<string, number>;
-  completedObjectiveIds: string[];
-  failed: boolean;
-  succeeded: boolean;
-}
-```
-
-### 3. Player Health
-
-Add a basic player health model.
-
-**Collision note:** The player dragon currently uses a `kinematicVelocity` rigid body with no collider, so it passes through all objects. Damage detection should use proximity checks or a sensor collider (detects overlap without blocking movement) rather than physics collisions.
-
-Suggested first pass:
-
-- max HP = `100`
-- enemy projectile proximity hit = `10-20` per hit
-- no healing items yet
-- LeafWing heal and future support abilities can restore HP later
-
-HUD should show:
-- current HP
-- warning state below 30%
-
-### 4. Targets And Enemies
-
-Start simple. Use towers before building full enemy dragons.
-
-First enemy types:
-
-- `Watchtower`
-  - stationary
-  - has health
-  - periodically shoots at player
-
-- `Beacon`
-  - inactive until towers are destroyed
-  - acts as end-of-mission objective
-
-Optional second pass:
-
-- `HunterBallista`
-  - slower rate of fire
-  - heavier damage
-
-### 5. Projectile Damage Rules
-
-**Implementation note:** The current projectile system (`fireballEmitter`) is player-only. Enemy projectiles need a separate emitter or a generalized system that tags projectiles as `player` or `enemy`. Enemy projectile hits should be detected via proximity checks against the player position each frame, since the player has no physics collider.
-
-Player projectile hits should:
-
-- damage towers (proximity check against tower positions)
-- possibly damage enemies later
-- create readable impact feedback
-
-Enemy projectile hits should:
-
-- damage player (proximity check against player position)
-- trigger flash or vignette feedback
-
-### 6. HUD
-
-First mission HUD should include:
-- mission name
-- current objective text
-- progress counter
-- player HP
-- special cooldown
-- mission result overlay on success/fail
-
-### 7. Feedback
-
-Needed for readability:
-
-- target hit flash
-- target destroyed effect
-- low-health screen effect
-- beacon activation effect
-- mission complete overlay
-- placeholder sound effects (hit, destroy, damage taken, mission complete) — not critical for Phase 1 but significantly improves readability
-
-## Content Plan By Region
-
-This is content direction, not immediate build scope.
-
-### Pyrrhia
-
-Tone:
-- war-torn skies
-- fortresses
-- open combat
-
-Mission examples:
-- destroy raider towers
-- defend caravan route
-- chase down a rogue dragon
-
-### Pantala
-
-Tone:
-- strange ecosystems
-- stealth routes
-- dangerous flora
-
-Mission examples:
-- rescue cocooned hatchlings
-- burn through webbed canyons
-- cross toxic air pockets
-
-### Glaeryus
-
-Tone:
-- mythic ruins
-- ancient machines
-- precision trials
-
-Mission examples:
-- reactivate ancient sky-rings
-- navigate ruin corridors
-- defeat relic guardians
-
-## Recommended Build Order In This Repo
-
-### Step 1: Introduce Screen And Mission State
-
-Target files:
-- `src/App.tsx`
-- new mission data module
-
-Deliverable:
-- player can move from dragon select to mission brief to mission play to success/fail states
-
-### Step 2: Add Player Health And HUD
-
-Target files:
-- `src/App.tsx`
-- new HUD components
-
-Deliverable:
-- visible HP and readable mission text
-
-### Step 3: Add Watchtower Actors
-
-Target files:
-
-- `src/world/Watchtower.tsx` and `src/world/Beacon.tsx` (extract from App.tsx — mandatory, App.tsx is already ~1100 lines)
-
-Deliverable:
-- three destructible towers with HP and attack behavior
-
-### Step 4: Connect Objective Progress
-
-Deliverable:
-- destroying towers updates progress
-- beacon objective unlocks after all towers are destroyed
-
-### Step 5: Add Mission End Conditions
-
-Deliverable:
-- mission success screen
-- mission fail screen
-- retry flow
-
-### Step 6: Add Second And Third Mission Templates
-
-Deliverable:
-- race mission
-- rescue or survival mission
-
-## Proposed File Structure
-
-This is a recommended direction, not a strict requirement.
-
-```txt
-src/
-  App.tsx
-  dragons.ts
-  game/
-    missions.ts
-    missionTypes.ts
-    gameState.ts
-  components/
-    hud/
-      MissionHud.tsx
-      HealthHud.tsx
-      MissionResultOverlay.tsx
-    screens/
-      MissionBrief.tsx
-  world/
-    actors/
-      PlayerDragon.tsx
-      Watchtower.tsx
-      Beacon.tsx
-      Projectile.tsx
-```
-
-## Risks To Avoid
-
-1. Adding too many dragons or VFX before missions exist.
-2. Building a huge story before the core loop is fun.
-3. Jumping to open-world structure before compact missions work.
-4. Making dragons numerically different but not functionally different.
-5. Adding progression systems before success/failure feedback feels good.
-
-## Definition Of Success
-
-The next meaningful milestone is reached when a new player can:
-
-1. Choose a dragon.
-2. Understand the mission in under 10 seconds.
-3. Complete or fail a structured mission in 3-5 minutes.
-4. Feel that their dragon choice influenced the experience.
-5. Want to immediately retry with a different dragon.
-
-## Immediate Build Checklist
-
-This is the practical near-term backlog.
-
-- Create mission definitions
-- Add app screen flow
-- Add mission brief screen
-- Add player HP and fail state
-- Add 3 destructible watchtowers
-- Add tower attacks
-- Add mission HUD
-- Add beacon activation goal
-- Add mission success/fail overlays
-- Add retry loop
-
-Once that works, build the second mission type instead of adding more dragons.
+Multiplayer, giant procedural worlds, branching dialogue campaigns, monetized progression, and deep skill trees remain outside the first release. Finish the short campaign and its sensory quality before multiplying systems.

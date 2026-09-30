@@ -1,6 +1,9 @@
 import type { MissionDefinition, MissionRuntimeState } from "./game/missions";
 import { calculateStars } from "./game/missions";
 import type { DragonType } from "./dragons";
+import { useEffect, useRef } from "react";
+import { dragonMastery } from "./game/progression";
+import type { GuardianProgress } from "./game/progression";
 
 function Stars({ count }: { count: number }) {
   return (
@@ -28,6 +31,11 @@ export default function MissionResult({
   missionState,
   onRetry,
   onBack,
+  onVictory,
+  progress,
+  nextMission,
+  onContinue,
+  saveUnavailable,
 }: {
   mission: MissionDefinition;
   dragon: DragonType;
@@ -35,9 +43,21 @@ export default function MissionResult({
   missionState: MissionRuntimeState;
   onRetry: () => void;
   onBack: () => void;
+  onVictory: (mission: MissionDefinition, state: MissionRuntimeState, dragonId: string) => void;
+  progress: GuardianProgress;
+  nextMission?: MissionDefinition;
+  onContinue: (mission: MissionDefinition) => void;
+  saveUnavailable: boolean;
 }) {
+  const recorded = useRef(false);
+  useEffect(() => {
+    if (!success || recorded.current) return;
+    recorded.current = true;
+    onVictory(mission, missionState, dragon.id);
+  }, [success, onVictory, mission, missionState, dragon.id]);
   const accent = success ? "#44ff88" : "#ff6655";
   const stars = success ? calculateStars(missionState, mission) : 0;
+  const mastery = dragonMastery(progress, dragon.id);
 
   const statLabel =
     mission.starMetric === "time"
@@ -75,14 +95,20 @@ export default function MissionResult({
           </p>
         ) : (
           <p className="result-text">
-            {mission.type === "beacon_run"
-              ? "Time ran out. The storm has closed in."
+            {mission.timeLimitSeconds && missionState.elapsedTime >= mission.timeLimitSeconds
+              ? "Time ran out. Try a tighter route or a faster approach."
               : "Your dragon was overwhelmed. Regroup and try again."}
           </p>
         )}
         <div className="result-dragon">
           <span style={{ color: dragon.colors.body }}>{dragon.name}</span>
         </div>
+        {success && <div className="guardian-summary">
+          <strong>{mastery.rank} · {mastery.stars}/{mastery.maxStars} dragon mastery stars</strong>
+          <span>Mission best: {progress.missions[mission.id]?.stars ?? stars}/3 stars</span>
+          <p>{saveUnavailable ? "Browser storage is unavailable. Progress lasts for this session." : "Guardian log saved on this browser."}</p>
+          {stars < 3 && <p>Three-star goal: {mission.starMetric === "time" ? `finish in ${mission.starThresholds.three}s or less` : `finish with at least ${mission.starThresholds.three} HP`}.</p>}
+        </div>}
         <div className="brief-actions">
           <button
             type="button"
@@ -104,6 +130,7 @@ export default function MissionResult({
             {success ? "REPLAY" : "RETRY"}
           </button>
         </div>
+        {success && nextMission && <button type="button" className="brief-btn brief-btn-start campaign-continue" onClick={() => onContinue(nextMission)}>NEXT CHAPTER · {nextMission.name}</button>}
       </div>
     </div>
   );

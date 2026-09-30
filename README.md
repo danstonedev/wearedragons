@@ -55,6 +55,14 @@ Flight now accelerates and brakes smoothly, with capsule sweeps against physical
 
 ## Development guide
 
+### Guardian log and replay goals
+
+Mission victories now save best stars, fastest time, highest HP, clear count, and stars for the dragon that finishes the mission. The Guardian Log recommends the first unfinished chapter, and the result screen offers a direct continuation plus the three-star target. Dragon mastery totals best stars across the four missions; replays cannot inflate it. Saves stay on the current browser/device and do not sync between a computer and headset. If storage is blocked, play continues with session progress.
+
+Sky Circuit gates face their approach routes, use cyan approach lights, and count swept crossings through the ring plane. If you miss one, turn back and cross it from either side.
+
+To check this revision: win Beacon Ridge, continue to Sky Circuit, return to the Guardian Log, and reload. Confirm the best record remains, then replay with a different dragon. Try a worse result to confirm it does not lower the saved stars. In Sky Circuit, cross the lit ring quickly, miss one on purpose, and return through it. Repeat on Quest to check visibility and approach comfort. See [the updated design plan](docs/gameplay-roadmap.md) for the next production priorities and playtest gates.
+
 Start with [the modernization audit and prioritized plan](docs/modernization-audit.md). It distinguishes code-confirmed fixes from unverified graphics and VR work, and describes the next playable slice.
 
 | Area | Location |

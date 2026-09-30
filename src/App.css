@@ -860,3 +860,13 @@ html, body, #root {
 .scene-unavailable { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #122430; color: #f3e6be; padding: 25px; text-align: center; font-family: system-ui, sans-serif; }
 html:not([data-device="desktop"]) .flight-controls-hint { display: none; }
 html:not([data-device="desktop"]) .flight-ability { bottom: auto; top: 66px; }
+
+/* Guardian log: persistent goals and compact records. */
+.guardian-summary { display: grid; gap: 8px; margin: 16px 0 22px; padding: 16px; border: 1px solid #72d9dc33; border-radius: 12px; background: #101f28b8; color: #d9edf0; font: 13px/1.5 system-ui, sans-serif; }
+.guardian-summary p { margin: 0; color: #acc2cb; }
+.guardian-summary progress { width: 100%; height: 10px; accent-color: #66d4df; }
+.mission-record { margin-top: 8px; color: #bdced1; font: 12px/1.5 system-ui, sans-serif; }
+.mission-record span { color: #f2cf76; font-size: 16px; letter-spacing: 2px; }
+.mission-record b { color: #83e3ed; font-size: 11px; }
+.mission-select-card.campaign-next { border-color: #66d4df99; box-shadow: 0 0 20px #42b7cb12; }
+.campaign-continue { margin-top: 14px; width: 100%; }

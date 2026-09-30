@@ -11,6 +11,7 @@ import PlayerDragon from "./world/PlayerDragon";
 import Projectiles, { EnemyProjectiles } from "./world/Projectiles";
 import Watchtower from "./world/Watchtower";
 import FlyingRaider from "./world/FlyingRaider";
+import RaceCheckpoints from "./world/RaceCheckpoints";
 import CombatFeedback from "./world/CombatFeedback";
 import { joy, pan, playerPos, playerStatus, abilityState, gameSession, missionEmitter } from "./game/runtime";
 import { useRef, useEffect, useMemo, useState, useCallback } from "react";
@@ -53,6 +54,8 @@ import DPadControls from "./controls/DPadControls";
 import SettingsPanel from "./SettingsPanel";
 import { settings } from "./controls/ControlSettings";
 import ModeSelect from "./ModeSelect";
+import { useGuardianProgress } from "./game/useGuardianProgress";
+import { nextCampaignMission } from "./game/progression";
 import { WORLD_REGIONS, getRegionAtPos } from "./game/worlds";
 import type { WorldRegion } from "./game/worlds";
 import { preset, isTouchDevice } from "./utils/device";
@@ -211,84 +214,6 @@ function BeaconObj({
     </group>
   );
 }
-// ---- Race Checkpoint Rings ----
-
-const CHECKPOINT_POSITIONS: [number, number, number][] = [
-  [0, 8, -20],
-  [20, 12, -35],
-  [40, 6, -50],
-  [30, 15, -70],
-  [0, 10, -80],
-  [-30, 18, -65],
-  [-40, 8, -40],
-  [-20, 14, -20],
-];
-
-function CheckpointRing({
-  position,
-  index,
-  nextIndex,
-}: {
-  position: [number, number, number];
-  index: number;
-  nextIndex: number;
-}) {
-  const ringRef = useRef<THREE.Mesh>(null);
-  const triggered = useRef(false);
-  const isNext = index === nextIndex;
-  const isPassed = index < nextIndex;
-
-  useFrame((_, delta) => {
-    if (ringRef.current) {
-      ringRef.current.rotation.y += delta * 0.8;
-    }
-    if (!gameSession.paused && !triggered.current && isNext && ringRef.current) {
-      const dx = playerPos.x - position[0];
-      const dy = playerPos.y - position[1];
-      const dz = playerPos.z - position[2];
-      if (dx * dx + dy * dy + dz * dz < 25) {
-        triggered.current = true;
-        missionEmitter.dispatchEvent(
-          new CustomEvent("checkpoint_reached", { detail: { index } }),
-        );
-      }
-    }
-  });
-
-  if (isPassed) return null;
-
-  return (
-    <group position={position}>
-      <mesh ref={ringRef}>
-        <torusGeometry args={[3.5, 0.25, 8, 24]} />
-        <meshStandardMaterial
-          color={isNext ? "#44bbff" : "#335566"}
-          emissive={isNext ? "#44bbff" : "#000"}
-          emissiveIntensity={isNext ? 1.5 : 0}
-          transparent
-          opacity={isNext ? 1 : 0.4}
-        />
-      </mesh>
-      {isNext && <pointLight color="#44bbff" intensity={5} distance={20} />}
-    </group>
-  );
-}
-
-function RaceCheckpoints({ passedCount }: { passedCount: number }) {
-  return (
-    <group>
-      {CHECKPOINT_POSITIONS.map((pos, i) => (
-        <CheckpointRing
-          key={i}
-          position={pos}
-          index={i}
-          nextIndex={passedCount}
-        />
-      ))}
-    </group>
-  );
-}
-
 // ---- Wave Spawner (Survival Mission) ----
 
 const WAVE_TOWER_POSITIONS: [number, number, number][][] = [
@@ -1370,6 +1295,7 @@ function GameWorld({
 }
 
 export default function App() {
+  const { progress: guardianProgress, saveVictory, saveUnavailable } = useGuardianProgress();
   const [screen, setScreen] = useState<AppScreen>("dragon_select");
   const [selectedDragon, setSelectedDragon] = useState<DragonType | null>(null);
   const [currentMission, setCurrentMission] = useState<MissionDefinition>(
@@ -1415,6 +1341,8 @@ export default function App() {
     return (
       <MissionSelect
         dragon={selectedDragon}
+        progress={guardianProgress}
+        saveUnavailable={saveUnavailable}
         onSelect={(m) => {
           setCurrentMission(m);
           setScreen("mission_brief");
@@ -1449,6 +1377,14 @@ export default function App() {
         dragon={selectedDragon}
         success={missionState.succeeded}
         missionState={missionState}
+        progress={guardianProgress}
+        onVictory={saveVictory}
+        saveUnavailable={saveUnavailable}
+        nextMission={nextCampaignMission(guardianProgress)}
+        onContinue={(mission) => {
+          setCurrentMission(mission);
+          setScreen("mission_brief");
+        }}
         onRetry={() => {
           setMissionState(createMissionState(currentMission));
           setScreen("in_mission");
