@@ -3,11 +3,12 @@ import { BallCollider, CylinderCollider, RigidBody } from "@react-three/rapier";
 import * as THREE from "three";
 import { createPlantings } from "../game/landscape";
 import type { LandscapeKind } from "../game/landscape";
+import { finalizeInstances, renderingBudget } from "../game/rendering";
 import { device } from "../utils/device";
 
 /** Connected crowns, smooth branches and shared instancing replace the old cone forest. */
 export default function Vegetation({ kind }: { kind: LandscapeKind }) {
-  const quest = device === "quest" || device === "mobile";
+  const quest = renderingBudget(device).constrained;
   const trees = useMemo(() => createPlantings(kind, "tree", kind === "ridge" ? (quest ? 65 : 105) : (quest ? 120 : 210)), [kind, quest]);
   const rocks = useMemo(() => createPlantings(kind, "rock", kind === "ridge" ? (quest ? 65 : 130) : (quest ? 100 : 165)), [kind, quest]);
   const trunk = useRef<THREE.InstancedMesh>(null);
@@ -73,7 +74,7 @@ export default function Vegetation({ kind }: { kind: LandscapeKind }) {
       stones.current?.setColorAt(i, color.set("#8b8172").multiplyScalar(0.75 + tint * 0.35));
     });
     for (const mesh of [trunk.current, branches.current, lower.current, upper.current, side.current, stones.current]) {
-      if (mesh) { mesh.instanceMatrix.needsUpdate = true; if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true; }
+      finalizeInstances(mesh);
     }
   }, [trees, rocks]);
 
@@ -82,22 +83,22 @@ export default function Vegetation({ kind }: { kind: LandscapeKind }) {
       {trees.map((tree, i) => <CylinderCollider key={`t${i}`} args={[1.5 * tree.scale, 0.24 * tree.scale]} position={[tree.x, tree.y + 1.5 * tree.scale, tree.z]} />)}
       {rocks.filter(rock => rock.scale > 0.65).map((rock, i) => <BallCollider key={`r${i}`} args={[rock.scale * 0.57]} position={[rock.x, rock.y + rock.scale * 0.43, rock.z]} />)}
     </RigidBody>
-    <instancedMesh ref={trunk} args={[trunkGeo, undefined, trees.length]} castShadow receiveShadow>
+    <instancedMesh ref={trunk} args={[trunkGeo, undefined, trees.length]} castShadow={!quest} receiveShadow>
       <meshStandardMaterial roughness={0.96} />
     </instancedMesh>
-    <instancedMesh ref={branches} args={[branchGeo, undefined, trees.length * 2]} castShadow>
+    <instancedMesh ref={branches} args={[branchGeo, undefined, trees.length * 2]} castShadow={!quest}>
       <meshStandardMaterial roughness={0.96} />
     </instancedMesh>
-    <instancedMesh ref={lower} args={[crownGeo, undefined, trees.length]} castShadow receiveShadow>
+    <instancedMesh ref={lower} args={[crownGeo, undefined, trees.length]} castShadow={!quest} receiveShadow>
       <meshStandardMaterial roughness={0.92} />
     </instancedMesh>
-    <instancedMesh ref={upper} args={[crownGeo, undefined, trees.length]} castShadow>
+    <instancedMesh ref={upper} args={[crownGeo, undefined, trees.length]} castShadow={!quest}>
       <meshStandardMaterial roughness={0.9} />
     </instancedMesh>
-    <instancedMesh ref={side} args={[crownGeo, undefined, trees.length]} castShadow>
+    <instancedMesh ref={side} args={[crownGeo, undefined, trees.length]} castShadow={!quest}>
       <meshStandardMaterial roughness={0.93} />
     </instancedMesh>
-    <instancedMesh ref={stones} args={[rockGeo, undefined, rocks.length]} castShadow receiveShadow>
+    <instancedMesh ref={stones} args={[rockGeo, undefined, rocks.length]} castShadow={!quest} receiveShadow>
       <meshStandardMaterial roughness={0.95} />
     </instancedMesh>
   </>;

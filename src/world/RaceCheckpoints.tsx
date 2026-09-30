@@ -44,7 +44,6 @@ function CheckpointRing({ index, nextIndex }: { index: number; nextIndex: number
       {[4, 8, 12].map(distance => <mesh key={distance} position={[0, -2.5, -distance]}>
         <sphereGeometry args={[0.18, 6, 6]} /><meshBasicMaterial color="#72e6ff" />
       </mesh>)}
-      <pointLight color="#44bbff" intensity={4} distance={16} />
     </>}
   </group>;
 }

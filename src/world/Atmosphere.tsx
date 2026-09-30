@@ -3,11 +3,11 @@ import { useFrame } from "@react-three/fiber";
 import { Sky } from "@react-three/drei";
 import * as THREE from "three";
 import { playerPos } from "../game/runtime";
-import { preset } from "../utils/device";
+import { finalizeInstances, renderingBudget } from "../game/rendering";
 import { device } from "../utils/device";
 
 function CloudLayer() {
-  const count = device === "quest" || device === "mobile" ? 24 : 48;
+  const count = renderingBudget(device).clouds;
   const cloud = useRef<THREE.InstancedMesh>(null);
   const particles = useMemo(() => Array.from({ length: count }, (_, i) => ({
     x: ((i * 47) % 240) - 120,
@@ -28,7 +28,7 @@ function CloudLayer() {
       object.scale.set(particle.scale * 1.8, particle.scale * 0.38, particle.scale);
       object.updateMatrix(); cloud.current?.setMatrixAt(i, object.matrix);
     });
-    if (cloud.current) cloud.current.instanceMatrix.needsUpdate = true;
+    finalizeInstances(cloud.current);
   }, [particles, object]);
   useEffect(() => () => geometry.dispose(), [geometry]);
   return <instancedMesh ref={cloud} args={[geometry, undefined, count]} frustumCulled={false} renderOrder={-1}>
@@ -43,9 +43,13 @@ export default function Atmosphere({ region = "pyrrhia" }: { region?: string }) 
   const mist = region === "pantala" ? "#ddbf91" : region === "glaeryus" ? "#8ba8bf" : "#bacdd0";
   useFrame(() => {
     if (!sun.current) return;
-    target.position.set(playerPos.x, 0, playerPos.z);
+    // Snap the follow-light to shadow texels rather than shimmer on every tiny move.
+    const texel = 90 / renderingBudget(device).shadowMapSize;
+    const x = Math.round(playerPos.x / texel) * texel;
+    const z = Math.round(playerPos.z / texel) * texel;
+    target.position.set(x, 0, z);
     target.updateMatrixWorld();
-    sun.current.position.set(playerPos.x + 35, 55, playerPos.z + 20);
+    sun.current.position.set(x + 35, 55, z + 20);
   });
   return <>
     <color attach="background" args={[mist]} />
@@ -54,9 +58,9 @@ export default function Atmosphere({ region = "pyrrhia" }: { region?: string }) 
     <CloudLayer />
     <hemisphereLight args={["#d6ecff", "#544d41", 0.82]} />
     <directionalLight
-      ref={sun} target={target} castShadow position={[35, 55, 20]} intensity={2.15}
+      ref={sun} target={target} castShadow={renderingBudget(device).shadows} position={[35, 55, 20]} intensity={2.15}
       color={region === "glaeryus" ? "#dae6ff" : "#ffe0b8"}
-      shadow-mapSize={[preset.shadowMapSize, preset.shadowMapSize]}
+      shadow-mapSize={[renderingBudget(device).shadowMapSize, renderingBudget(device).shadowMapSize]}
       shadow-camera-left={-45} shadow-camera-right={45}
       shadow-camera-top={45} shadow-camera-bottom={-45}
       shadow-camera-far={150} shadow-normalBias={0.04}

@@ -3,6 +3,7 @@ import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { createScatter, terrainHeight } from "../game/landscape";
 import type { LandscapeKind } from "../game/landscape";
+import { finalizeInstances, renderingBudget } from "../game/rendering";
 import { device } from "../utils/device";
 
 function pathGeometry(points: Array<[number, number]>, kind: LandscapeKind, width: number) {
@@ -31,7 +32,17 @@ function MountainBackdrop({ kind }: { kind: LandscapeKind }) {
     const height = 24 + (Math.sin(i * 4.13) * 0.5 + 0.5) * 35;
     return { x: Math.sin(angle) * radius, z: Math.cos(angle) * radius, height, width: 15 + height * 0.35, rotation: angle };
   }), [kind]);
-  const geometry = useMemo(() => new THREE.ConeGeometry(1, 1, 7, 4), []);
+  const geometry = useMemo(() => {
+    const ridge = new THREE.ConeGeometry(1, 1, 12, 7);
+    const vertices = ridge.attributes.position;
+    for (let i = 0; i < vertices.count; i++) {
+      const x = vertices.getX(i), y = vertices.getY(i), z = vertices.getZ(i);
+      const erosion = 1 + Math.sin(x * 7 + z * 4) * 0.16 + Math.cos(z * 9 - y * 6) * 0.12;
+      vertices.setXYZ(i, x * erosion + (y + 0.5) * 0.1, y + Math.sin(x * 5 + z * 6) * 0.04, z * erosion);
+    }
+    ridge.computeVertexNormals();
+    return ridge;
+  }, []);
   const mesh = useRef<THREE.InstancedMesh>(null);
   useEffect(() => {
     const object = new THREE.Object3D();
@@ -41,16 +52,16 @@ function MountainBackdrop({ kind }: { kind: LandscapeKind }) {
       object.rotation.set(0, mountain.rotation, 0);
       object.updateMatrix(); mesh.current?.setMatrixAt(i, object.matrix);
     });
-    if (mesh.current) mesh.current.instanceMatrix.needsUpdate = true;
+    finalizeInstances(mesh.current);
   }, [mountains]);
   useEffect(() => () => geometry.dispose(), [geometry]);
   return <instancedMesh ref={mesh} args={[geometry, undefined, mountains.length]} receiveShadow>
-    <meshStandardMaterial color={kind === "ridge" ? "#5f6861" : "#657069"} roughness={1} flatShading />
+    <meshStandardMaterial color={kind === "ridge" ? "#5f6861" : "#657069"} roughness={1} />
   </instancedMesh>;
 }
 
 function Meadow({ kind }: { kind: LandscapeKind }) {
-  const count = device === "quest" || device === "mobile" ? 420 : 1050;
+  const count = renderingBudget(device).grass;
   const scatter = useMemo(() => createScatter(kind, count, 442), [kind, count]);
   const grass = useRef<THREE.InstancedMesh>(null);
   const geometry = useMemo(() => {
@@ -70,7 +81,7 @@ function Meadow({ kind }: { kind: LandscapeKind }) {
       object.updateMatrix(); grass.current?.setMatrixAt(i, object.matrix);
       grass.current?.setColorAt(i, color.set(i % 4 === 0 ? "#9d9859" : "#6e8b4d").multiplyScalar(0.75 + (i % 11) * 0.025));
     });
-    if (grass.current) { grass.current.instanceMatrix.needsUpdate = true; if (grass.current.instanceColor) grass.current.instanceColor.needsUpdate = true; }
+    finalizeInstances(grass.current);
   }, [scatter]);
   useEffect(() => () => geometry.dispose(), [geometry]);
   return <instancedMesh ref={grass} args={[geometry, undefined, count]} frustumCulled castShadow={false}>
@@ -99,11 +110,11 @@ function RegionalLandmarks() {
       object.updateMatrix(); rocks.current?.setMatrixAt(i, object.matrix);
       rocks.current?.setColorAt(i, color.set(formation.eastern ? "#9a684d" : "#586a72").multiplyScalar(0.78 + (i % 7) * 0.045));
     });
-    if (rocks.current) { rocks.current.instanceMatrix.needsUpdate = true; if (rocks.current.instanceColor) rocks.current.instanceColor.needsUpdate = true; }
+    finalizeInstances(rocks.current);
   }, [formations]);
   useEffect(() => () => geometry.dispose(), [geometry]);
   return <instancedMesh ref={rocks} args={[geometry, undefined, formations.length]} castShadow receiveShadow>
-    <meshStandardMaterial roughness={0.96} flatShading />
+    <meshStandardMaterial roughness={0.96} />
   </instancedMesh>;
 }
 
@@ -124,7 +135,7 @@ function Lake() {
   return <>
     <mesh ref={surface} position={[62, -1.55, -82]} rotation={[-Math.PI / 2, 0, 0]}>
       <circleGeometry args={[28, 64]} />
-      <meshPhysicalMaterial color="#416e79" roughness={0.17} metalness={0.08} clearcoat={0.65} clearcoatRoughness={0.2} transparent opacity={0.86} depthWrite={false} />
+      <meshStandardMaterial color="#416e79" roughness={0.24} metalness={0.15} />
     </mesh>
     <mesh ref={rippleA} position={[62, -1.46, -82]} rotation={[-Math.PI / 2, 0, 0]}>
       <ringGeometry args={[22, 28, 64]} />

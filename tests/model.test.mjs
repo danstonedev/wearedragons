@@ -60,6 +60,17 @@ test("the roster has distinct silhouette families for every selectable dragon", 
   assert.equal(new Set(families).size, 6);
 });
 
+test("animated dragons keep visible wings with shared membrane relief and a single transparency pass", () => {
+  const scene = clone(gltf.scene);
+  colorDragonModel(scene, DRAGON_TYPES[0].colors, DRAGON_TYPES[0].effects);
+  for (const mesh of meshes(scene).filter(mesh => mesh.isSkinnedMesh)) assert.equal(mesh.frustumCulled, false);
+  const wing = meshes(scene).find(mesh => mesh.material.name === "Wings").material;
+  assert.ok(wing.bumpMap?.isDataTexture);
+  assert.equal(wing.depthWrite, false);
+  assert.equal(wing.forceSinglePass, true);
+  assert.equal(wing.bumpMap.generateMipmaps, true);
+});
+
 test("every silhouette attachment binds to the real skeleton and follows every animation", () => {
   const plans = DRAGON_TYPES.flatMap(dragon => dragonAttachmentPlan(dragon.id));
   assert.ok(plans.length > 0);

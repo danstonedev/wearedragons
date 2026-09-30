@@ -6,10 +6,24 @@ import { dragonAttachmentPlan } from "../game/dragonVisuals";
 /** Adds owned geometry directly to named bones, so each cue follows every animation clip. */
 export default function DragonAdornments({ dragon, scene }: { dragon: DragonType; scene: THREE.Object3D }) {
   useEffect(() => {
+    const horn = new THREE.ConeGeometry(0.5, 1.4, 14, 5);
+    const positions = horn.attributes.position;
+    for (let i = 0; i < positions.count; i++) {
+      const t = (positions.getY(i) + 0.7) / 1.4;
+      positions.setZ(i, positions.getZ(i) + t * t * 0.45);
+    }
+    horn.computeVertexNormals();
+    const membrane = new THREE.Shape();
+    membrane.moveTo(-0.5, -0.65);
+    membrane.quadraticCurveTo(-0.25, 0.3, 0, 0.8);
+    membrane.quadraticCurveTo(0.12, 0.2, 0.55, -0.65);
+    membrane.quadraticCurveTo(0, -0.45, -0.5, -0.65);
+    const fin = new THREE.ExtrudeGeometry(membrane, { depth: 0.04, bevelEnabled: false, curveSegments: 8, steps: 1 });
+    fin.rotateY(Math.PI / 2);
     const geometries = {
-      cone: new THREE.ConeGeometry(0.5, 1.4, 12, 2),
-      plate: new THREE.OctahedronGeometry(0.6, 1),
-      fin: new THREE.ConeGeometry(0.65, 1.5, 12, 2),
+      cone: horn,
+      plate: new THREE.SphereGeometry(0.6, 12, 8),
+      fin,
     };
     const materials = {
       spike: new THREE.MeshStandardMaterial({ color: dragon.colors.spike, roughness: 0.62, metalness: dragon.effects?.clawMetalness ?? 0.08 }),

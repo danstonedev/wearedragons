@@ -788,6 +788,26 @@ function makeScaleRelief() {
 
 const scaleRelief = makeScaleRelief();
 
+/** Membrane ribs and folds share one mipmapped map across the entire roster. */
+function makeWingRelief() {
+  const size = 128;
+  const data = new Uint8Array(size * size * 4);
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+    const u = x / size, v = y / size;
+    const rib = Math.pow(Math.max(0, Math.cos((u * 5 + v * 1.5) * Math.PI * 2)), 16);
+    const folds = Math.sin((u * 22 - v * 6) * Math.PI) * 5;
+    const value = Math.round(128 + rib * 65 + folds);
+    const at = (y * size + x) * 4;
+    data[at] = data[at + 1] = data[at + 2] = value; data[at + 3] = 255;
+  }
+  const texture = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.generateMipmaps = true; texture.needsUpdate = true;
+  return texture;
+}
+const wingRelief = makeWingRelief();
+
 /**
  * Color a dragon.glb scene's meshes based on a DragonType color palette.
  *
@@ -808,6 +828,10 @@ export function colorDragonModel(
     if (!(child as THREE.Mesh).isMesh) return;
     const mesh = child as THREE.Mesh;
     mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    // Cached bind-pose bounds are unsafe for animated wings. These few hero meshes
+    // stay visible; scenery continues to use corrected frustum culling.
+    if ((mesh as THREE.SkinnedMesh).isSkinnedMesh) mesh.frustumCulled = false;
 
     const matName = (mesh.material as THREE.MeshStandardMaterial)?.name ?? "";
 
@@ -819,7 +843,8 @@ export function colorDragonModel(
           roughness: fx.bodyRoughness ?? 0.7,
           metalness: fx.bodyMetalness ?? 0.05,
           bumpMap: scaleRelief,
-          bumpScale: 0.035,
+          bumpScale: 0.065,
+          roughnessMap: scaleRelief,
           ...(fx.bodyEmissive && {
             emissive: fx.bodyEmissive,
             emissiveIntensity: fx.bodyEmissiveIntensity ?? 0.3,
@@ -836,6 +861,11 @@ export function colorDragonModel(
           transparent: true,
           opacity: fx.wingOpacity ?? 0.88,
           side: THREE.DoubleSide,
+          depthWrite: false,
+          forceSinglePass: true,
+          bumpMap: wingRelief,
+          bumpScale: 0.035,
+          roughnessMap: wingRelief,
           ...(fx.wingEmissive && {
             emissive: fx.wingEmissive,
             emissiveIntensity: fx.wingEmissiveIntensity ?? 0.3,
