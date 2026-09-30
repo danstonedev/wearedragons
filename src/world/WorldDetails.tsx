@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef } from "react";
+import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { createScatter, terrainHeight } from "../game/landscape";
 import type { LandscapeKind } from "../game/landscape";
@@ -106,6 +107,36 @@ function RegionalLandmarks() {
   </instancedMesh>;
 }
 
+function Lake() {
+  const surface = useRef<THREE.Mesh>(null);
+  const rippleA = useRef<THREE.Mesh>(null);
+  const rippleB = useRef<THREE.Mesh>(null);
+  useFrame((state) => {
+    const time = state.clock.elapsedTime;
+    if (surface.current) surface.current.position.y = -1.55 + Math.sin(time * 0.42) * 0.035;
+    for (const [ripple, offset] of [[rippleA.current, 0], [rippleB.current, 0.5]] as const) {
+      if (!ripple) continue;
+      const phase = (time * 0.08 + offset) % 1;
+      ripple.scale.setScalar(0.72 + phase * 0.32);
+      (ripple.material as THREE.MeshBasicMaterial).opacity = (1 - phase) * 0.16;
+    }
+  });
+  return <>
+    <mesh ref={surface} position={[62, -1.55, -82]} rotation={[-Math.PI / 2, 0, 0]}>
+      <circleGeometry args={[28, 64]} />
+      <meshPhysicalMaterial color="#416e79" roughness={0.17} metalness={0.08} clearcoat={0.65} clearcoatRoughness={0.2} transparent opacity={0.86} depthWrite={false} />
+    </mesh>
+    <mesh ref={rippleA} position={[62, -1.46, -82]} rotation={[-Math.PI / 2, 0, 0]}>
+      <ringGeometry args={[22, 28, 64]} />
+      <meshBasicMaterial color="#b3cfca" transparent opacity={0.12} depthWrite={false} />
+    </mesh>
+    <mesh ref={rippleB} position={[62, -1.45, -82]} rotation={[-Math.PI / 2, 0, 0]}>
+      <ringGeometry args={[22, 28, 64]} />
+      <meshBasicMaterial color="#b3cfca" transparent opacity={0.12} depthWrite={false} />
+    </mesh>
+  </>;
+}
+
 export default function WorldDetails({ kind }: { kind: LandscapeKind }) {
   const paths = useMemo(() => kind === "ridge" ? [
     pathGeometry([[0, 2], [-4, -10], [-15, -22], [-30, -30]], kind, 1.15),
@@ -120,15 +151,6 @@ export default function WorldDetails({ kind }: { kind: LandscapeKind }) {
     {paths.map((geometry, index) => <mesh key={index} geometry={geometry} receiveShadow>
       <meshStandardMaterial color="#8a7658" roughness={1} polygonOffset polygonOffsetFactor={-1} />
     </mesh>)}
-    {kind === "open" && <>
-      <mesh position={[62, -1.55, -82]} rotation={[-Math.PI / 2, 0, 0]}>
-        <circleGeometry args={[28, 64]} />
-        <meshPhysicalMaterial color="#486f79" roughness={0.2} metalness={0.05} transparent opacity={0.82} depthWrite={false} />
-      </mesh>
-      <mesh position={[62, -1.48, -82]} rotation={[-Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[23, 28, 64]} />
-        <meshBasicMaterial color="#87a397" transparent opacity={0.18} depthWrite={false} />
-      </mesh>
-    </>}
+    {kind === "open" && <Lake />}
   </>;
 }

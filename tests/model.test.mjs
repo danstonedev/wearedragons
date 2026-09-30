@@ -5,6 +5,7 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { clone } from "three/examples/jsm/utils/SkeletonUtils.js";
 import { DRAGON_TYPES, colorDragonModel } from "../src/dragons.ts";
+import { silhouetteFamily } from "../src/game/dragonVisuals.ts";
 
 const bytes = await readFile(new URL("../public/dragon.glb", import.meta.url));
 const gltf = await new Promise((resolve, reject) => new GLTFLoader().parse(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength), "", resolve, reject));
@@ -50,4 +51,11 @@ test("owned skeletons animate independently without binding to another dragon's 
   });
   assert.equal(changed, true);
   mixer.uncacheRoot(a);
+});
+
+test("the roster has distinct silhouette families for every selectable dragon", () => {
+  const families = DRAGON_TYPES.map(dragon => silhouetteFamily(dragon.id));
+  assert.equal(families.length, DRAGON_TYPES.length);
+  assert.ok(families.every(Boolean));
+  assert.equal(new Set(families).size, 6);
 });

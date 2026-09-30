@@ -14,6 +14,7 @@ import { createAbilityState, activateAbility, stepAbility } from "../game/abilit
 import { settings } from "../controls/ControlSettings";
 import { configureFlightController, moveFlightCharacter, PLAYER_GROUPS, PLAYER_CAPSULE, flightMode } from "../game/characterMovement";
 import { safeMuzzle, WORLD_ONLY } from "../game/aim";
+import DragonAdornments from "./DragonAdornments";
 
 const DRAGON_MODEL = `${import.meta.env.BASE_URL}dragon.glb`;
 
@@ -28,6 +29,7 @@ export default function PlayerDragon({ dragon }: { dragon: DragonType }) {
   const desiredVelocity = useRef({ x: 0, y: 0, z: 0 });
   const actualVelocity = useRef({ x: 0, y: 0, z: 0 });
   const visualGroupRef = useRef<THREE.Group>(null);
+  const adornmentRef = useRef<THREE.Group>(null);
 
   const cameraRef = useRef<THREE.PerspectiveCamera>(null);
   const cloakRef = useRef(false);
@@ -361,6 +363,12 @@ export default function PlayerDragon({ dragon }: { dragon: DragonType }) {
           mesh.material.opacity = baseOpacity * opacity;
         }
       }
+      adornmentRef.current?.traverse(child => {
+        const material = (child as THREE.Mesh).material;
+        if (!(material instanceof THREE.MeshStandardMaterial)) return;
+        material.transparent = cloakRef.current;
+        material.opacity = opacity;
+      });
       prevCloakRef.current = cloakRef.current;
     }
 
@@ -396,6 +404,9 @@ export default function PlayerDragon({ dragon }: { dragon: DragonType }) {
         <CapsuleCollider ref={colliderRef} args={[PLAYER_CAPSULE.halfHeight, PLAYER_CAPSULE.radius]} collisionGroups={PLAYER_GROUPS} />
         <group ref={visualGroupRef}>
           <primitive object={scene} />
+          <group ref={adornmentRef} scale={0.8} rotation={[0, Math.PI, 0]}>
+            <DragonAdornments dragon={dragon} />
+          </group>
         </group>
       </RigidBody>
       <PerspectiveCamera makeDefault ref={cameraRef} position={[0, 5, 10]} />

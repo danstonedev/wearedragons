@@ -5,6 +5,27 @@ import { createTerrainSurface, terrainHeight } from "../game/landscape";
 import type { LandscapeKind } from "../game/landscape";
 import { device } from "../utils/device";
 
+function groundRelief() {
+  const size = 128;
+  const data = new Uint8Array(size * size * 4);
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+    const stone = Math.sin(x * 0.51) * Math.cos(y * 0.43) * 14;
+    const grain = Math.sin(x * 2.73 + y * 1.91) * 9;
+    const value = Math.max(0, Math.min(255, 145 + stone + grain));
+    const at = (y * size + x) * 4;
+    data[at] = data[at + 1] = data[at + 2] = value;
+    data[at + 3] = 255;
+  }
+  const texture = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.repeat.set(28, 28);
+  texture.colorSpace = THREE.NoColorSpace;
+  texture.needsUpdate = true;
+  return texture;
+}
+
+const terrainRelief = groundRelief();
+
 function groundColor(x: number, z: number, y: number, kind: LandscapeKind, slope: number) {
   const green = new THREE.Color("#526e42");
   const dry = new THREE.Color("#ad8459");
@@ -29,6 +50,12 @@ export default function Landscape({ kind }: { kind: LandscapeKind }) {
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute("position", new THREE.BufferAttribute(surface.vertices, 3));
     geometry.setIndex(new THREE.BufferAttribute(surface.indices, 1));
+    const uvs = new Float32Array(surface.vertices.length / 3 * 2);
+    for (let i = 0; i < surface.vertices.length / 3; i++) {
+      uvs[i * 2] = surface.vertices[i * 3] / size + 0.5;
+      uvs[i * 2 + 1] = surface.vertices[i * 3 + 2] / size + 0.5;
+    }
+    geometry.setAttribute("uv", new THREE.BufferAttribute(uvs, 2));
     geometry.computeVertexNormals();
     const colors = new Float32Array(surface.vertices.length);
     for (let i = 0; i < colors.length; i += 3) {
@@ -46,7 +73,7 @@ export default function Landscape({ kind }: { kind: LandscapeKind }) {
     <RigidBody type="fixed" colliders={false} friction={1}>
       <TrimeshCollider args={[surface.vertices, surface.indices]} friction={1} />
       <mesh geometry={geometry} receiveShadow>
-        <meshStandardMaterial vertexColors roughness={0.95} metalness={0} />
+        <meshStandardMaterial vertexColors roughness={0.96} metalness={0} bumpMap={terrainRelief} bumpScale={0.22} />
       </mesh>
     </RigidBody>
   );

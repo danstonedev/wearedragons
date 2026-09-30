@@ -16,6 +16,7 @@ import { PROJECTILE_SIZE, MAX_STAT } from "./constants";
 import "./DragonSelect.css";
 import SceneBoundary from "./components/SceneBoundary";
 import { preset } from "./utils/device";
+import DragonAdornments from "./world/DragonAdornments";
 
 import { SkeletonUtils } from "three-stdlib";
 
@@ -66,12 +67,10 @@ const TRIBE_ATMOSPHERE: Record<
 /* ---- 3D Dragon Preview ---- */
 
 function DragonModel({
-  colors,
-  effects,
+  dragon,
   previewAnim,
 }: {
-  colors: DragonType["colors"];
-  effects?: DragonType["effects"];
+  dragon: DragonType;
   previewAnim?: { name: string; key: number };
 }) {
   const groupRef = useRef<THREE.Group>(null);
@@ -80,12 +79,12 @@ function DragonModel({
 
   const clonedScene = useMemo(() => {
     const clone = SkeletonUtils.clone(scene);
-    colorDragonModel(clone, colors, effects);
+    colorDragonModel(clone, dragon.colors, dragon.effects);
     clone.scale.set(0.3, 0.3, 0.3);
     clone.rotation.y = Math.PI * 0.8;
     clone.position.y = -0.5;
     return clone;
-  }, [scene, colors, effects]);
+  }, [scene, dragon]);
 
   const { actions, mixer } = useAnimations(animations, groupRef);
 
@@ -146,6 +145,9 @@ function DragonModel({
   return (
     <group ref={groupRef}>
       <primitive object={clonedScene} />
+      <group scale={0.3} rotation={[0, Math.PI * 0.8, 0]} position={[0, -0.5, 0]}>
+        <DragonAdornments dragon={dragon} />
+      </group>
     </group>
   );
 }
@@ -242,8 +244,7 @@ function DragonPreview3D({
       />
       <Suspense fallback={null}>
         <DragonModel
-          colors={dragon.colors}
-          effects={dragon.effects}
+          dragon={dragon}
           previewAnim={previewAnim}
         />
         <AttackPreviewEffect
