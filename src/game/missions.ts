@@ -53,6 +53,7 @@ export interface MissionRuntimeState {
   maxHp: number;
   elapsedTime: number;
   waveIndex: number;
+  processedEventIds: string[];
 }
 
 // ---- Missions ----
@@ -63,7 +64,7 @@ export const MISSIONS: MissionDefinition[] = [
     name: "Beacon Ridge",
     description: "Destroy the raider watchtowers and reactivate the sky-beacon.",
     briefing:
-      "Raiders have seized the ridge beacon and built watchtowers to guard it. Destroy all three towers, then fly through the beacon to restore the signal. Watch for return fire.",
+      "Raiders have seized the ridge beacon and built watchtowers to guard it. Destroy all three towers, then fly through the beacon to restore the signal. A flying scout patrols above the ridge: watch for its orange firing tell, dodge its shot, or drive it off.",
     region: "pyrrhia",
     type: "fortress_raid",
     objectives: [
@@ -169,6 +170,7 @@ export function createMissionState(
     maxHp: 100,
     elapsedTime: 0,
     waveIndex: 0,
+    processedEventIds: [],
   };
 }
 
@@ -177,11 +179,16 @@ export function advanceObjective(
   mission: MissionDefinition,
   objectiveId: string,
   amount = 1,
+  eventId?: string,
 ): MissionRuntimeState {
+  if (state.failed || state.succeeded || !Number.isFinite(amount) || amount <= 0) return state;
+  if (eventId && state.processedEventIds.includes(eventId)) return state;
+  const objDef = mission.objectives[state.activeObjectiveIndex];
+  if (!objDef || objDef.id !== objectiveId) return state;
   const next = { ...state, progress: { ...state.progress } };
-  next.progress[objectiveId] = (next.progress[objectiveId] ?? 0) + amount;
+  next.progress[objectiveId] = Math.min(objDef.requiredCount ?? 1, (next.progress[objectiveId] ?? 0) + amount);
+  if (eventId) next.processedEventIds = [...state.processedEventIds, eventId];
 
-  const objDef = mission.objectives.find((o) => o.id === objectiveId);
   if (objDef && next.progress[objectiveId] >= (objDef.requiredCount ?? 1)) {
     if (!next.completedObjectiveIds.includes(objectiveId)) {
       next.completedObjectiveIds = [...next.completedObjectiveIds, objectiveId];
@@ -204,6 +211,7 @@ export function applyDamage(
   state: MissionRuntimeState,
   amount: number,
 ): MissionRuntimeState {
+  if (state.failed || state.succeeded || !Number.isFinite(amount) || amount <= 0) return state;
   const next = { ...state };
   next.playerHp = Math.max(0, next.playerHp - amount);
   if (next.playerHp <= 0) {
@@ -216,9 +224,21 @@ export function applyHeal(
   state: MissionRuntimeState,
   amount: number,
 ): MissionRuntimeState {
+  if (state.failed || state.succeeded || !Number.isFinite(amount) || amount <= 0) return state;
   const next = { ...state };
   next.playerHp = Math.min(next.maxHp, next.playerHp + amount);
   return next;
+}
+
+export function updateMissionTime(state: MissionRuntimeState, mission: MissionDefinition, elapsed: number): MissionRuntimeState {
+  if (state.failed || state.succeeded || !Number.isFinite(elapsed) || elapsed < state.elapsedTime) return state;
+  return { ...state, elapsedTime: elapsed, failed: Boolean(mission.timeLimitSeconds && elapsed >= mission.timeLimitSeconds) };
+}
+
+export function completeWave(state: MissionRuntimeState, mission: MissionDefinition, waveIndex: number): MissionRuntimeState {
+  if (state.waveIndex !== waveIndex || mission.type !== "hunter_ambush") return state;
+  const next = advanceObjective(state, mission, "survive_waves", 1, `wave_${waveIndex}`);
+  return next === state ? state : { ...next, waveIndex: waveIndex + 1 };
 }
 
 export function calculateStars(

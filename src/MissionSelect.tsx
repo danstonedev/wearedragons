@@ -7,12 +7,14 @@ const TYPE_LABELS: Record<string, string> = {
   fortress_raid: "ASSAULT",
   beacon_run: "RACE",
   hunter_ambush: "SURVIVAL",
+  jade_citadel: "SIEGE",
 };
 
 const TYPE_COLORS: Record<string, string> = {
   fortress_raid: "#ff6644",
   beacon_run: "#44bbff",
   hunter_ambush: "#ff44aa",
+  jade_citadel: "#d2b878",
 };
 
 export default function MissionSelect({
@@ -86,7 +88,7 @@ export default function MissionSelect({
             className="brief-btn brief-btn-back"
             onClick={onBack}
           >
-            CHANGE DRAGON
+            BACK TO MODES
           </button>
         </div>
       </div>

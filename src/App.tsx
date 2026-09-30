@@ -1,29 +1,33 @@
+import { VRLaunch, VRScene } from "./vr/VRSupport";
+import SceneBoundary from "./components/SceneBoundary";
+import Atmosphere from "./world/Atmosphere";
+import FlightHUD from "./components/FlightHUD";
+import { useWorldSession } from "./game/useWorldSession";
+import type { Dispatch, SetStateAction } from "react";
+import PlayerDragon from "./world/PlayerDragon";
+import Projectiles, { EnemyProjectiles } from "./world/Projectiles";
+import Watchtower from "./world/Watchtower";
+import FlyingRaider from "./world/FlyingRaider";
+import CombatFeedback from "./world/CombatFeedback";
+import { joy, pan, playerPos, playerStatus, abilityState, gameSession, missionEmitter } from "./game/runtime";
 import { useRef, useEffect, useMemo, useState, useCallback } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import {
-  PerspectiveCamera,
   Plane,
-  Sky,
-  Environment,
-  useGLTF,
-  useAnimations,
 } from "@react-three/drei";
 import {
   Physics,
+  CuboidCollider,
   RigidBody,
   RapierRigidBody,
-  useRapier,
 } from "@react-three/rapier";
 import * as THREE from "three";
 import type { DragonType } from "./dragons";
 import {
   DRAGON_TYPES,
   TRIBES,
-  colorDragonModel,
-  animateDragonEffects,
 } from "./dragons";
-import ProjectileMesh from "./ProjectileMesh";
-import { PROJECTILE_SIZE, MAX_STAT } from "./constants";
+import { MAX_STAT } from "./constants";
 import DragonSelect from "./DragonSelect";
 import MissionSelect from "./MissionSelect";
 import MissionBrief from "./MissionBrief";
@@ -33,6 +37,9 @@ import {
   createMissionState,
   advanceObjective,
   applyDamage,
+  applyHeal,
+  updateMissionTime,
+  completeWave,
 } from "./game/missions";
 import type {
   AppScreen,
@@ -50,487 +57,16 @@ import { WORLD_REGIONS, getRegionAtPos } from "./game/worlds";
 import type { WorldRegion } from "./game/worlds";
 import { preset, isTouchDevice } from "./utils/device";
 
-const DRAGON_MODEL = `${import.meta.env.BASE_URL}dragon.glb`;
-
-const keys: Record<string, boolean> = {};
-const joy = {
-  left: { x: 0, y: 0 },
-  throttle: 0,
-  fire: false,
-  special: false,
-};
-const pan = { yaw: 0, pitch: 0, active: 0, lastX: 0, lastY: 0 };
-const fireballEmitter = new EventTarget();
-const missionEmitter = new EventTarget();
-const abilityState = { cooldownLeft: 0, active: false, label: "" };
-const playerPos = { x: 0, y: 5, z: 0 };
-
-function BlockyDragon({ dragon }: { dragon: DragonType }) {
-  const c = dragon.colors;
-  const s = dragon.stats;
-  const atk = dragon.attack;
-  const spec = dragon.special;
-  const rbRef = useRef<RapierRigidBody>(null);
-  const visualGroupRef = useRef<THREE.Group>(null);
-
-  const cameraRef = useRef<THREE.PerspectiveCamera>(null);
-  const cloakRef = useRef(false);
-  const rollRef = useRef(0);
-  const boostRef = useRef(0);
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      keys[e.key.toLowerCase()] = true;
-    };
-    const handleKeyUp = (e: KeyboardEvent) => {
-      keys[e.key.toLowerCase()] = false;
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    window.addEventListener("keyup", handleKeyUp);
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-      window.removeEventListener("keyup", handleKeyUp);
-    };
-  }, []);
-
-  const lastFireTimeRef = useRef(0);
-  const lastSpecialTimeRef = useRef(-999);
-
-  const { rapier, world } = useRapier();
-  const { scene, animations: rawAnimations } = useGLTF(DRAGON_MODEL);
-
-  // Strip static tracks from animations to reduce per-frame evaluation (~73% are no-ops)
-  const animations = useMemo(() => {
-    return rawAnimations.map((clip) => {
-      const filtered = clip.tracks.filter((track) => {
-        const vals = track.values;
-        const stride = track.getValueSize();
-        for (let i = stride; i < vals.length; i++) {
-          if (Math.abs(vals[i] - vals[i % stride]) > 0.0001) return true;
-        }
-        return false;
-      });
-      return new THREE.AnimationClip(clip.name, clip.duration, filtered);
-    });
-  }, [rawAnimations]);
-
-  const { actions } = useAnimations(animations, visualGroupRef);
-  const activeAnimRef = useRef<string>("");
-  const targetTimeScaleRef = useRef(1);
-  const prevCloakRef = useRef(false);
-  const meshListRef = useRef<THREE.Mesh[]>([]);
-
-  // Reusable objects to avoid per-frame allocations
-  const _camVec = useMemo(() => new THREE.Vector3(), []);
-  const _camQuat = useMemo(() => new THREE.Quaternion(), []);
-  const _camEuler = useMemo(() => new THREE.Euler(), []);
-  const _camOffset = useMemo(() => new THREE.Vector3(), []);
-  const _lookAt = useMemo(() => new THREE.Vector3(), []);
-  const _muzzleOffset = useMemo(() => new THREE.Vector3(), []);
-  const _muzzleEuler = useMemo(() => new THREE.Euler(), []);
-  const _spawnPos = useMemo(() => new THREE.Vector3(), []);
-  const _fireVel = useMemo(() => new THREE.Vector3(), []);
-  const _fireEuler = useMemo(() => new THREE.Euler(), []);
-  const _ray = useMemo(
-    () => new rapier.Ray({ x: 0, y: 0, z: 0 }, { x: 0, y: -1, z: 0 }),
-    [rapier],
-  );
-
-  useEffect(() => {
-    const flyAction = actions["Dragon_Flying"] ?? Object.values(actions)[0];
-    if (flyAction) {
-      flyAction.reset().fadeIn(0.5).play();
-      activeAnimRef.current = "Dragon_Flying";
-    }
-
-    if (scene) {
-      colorDragonModel(scene, c, dragon.effects);
-      scene.scale.set(0.8, 0.8, 0.8);
-      scene.rotation.y = Math.PI;
-
-      // Cache mesh list for fast cloak updates (avoid per-frame traverse)
-      const meshes: THREE.Mesh[] = [];
-      scene.traverse((child) => {
-        if ((child as THREE.Mesh).isMesh) meshes.push(child as THREE.Mesh);
-      });
-      meshListRef.current = meshes;
-    }
-  }, [actions, scene, c]);
-
-  useFrame((state, delta) => {
-    if (!rbRef.current || !visualGroupRef.current) return;
-    const now = state.clock.getElapsedTime();
-    const baseMaxSpeed = 20 * s.speed;
-    const maxSpeed = boostRef.current > 0 ? baseMaxSpeed * 2.0 : baseMaxSpeed;
-
-    if (keys["f"]) joy.fire = true;
-    if (joy.fire && now - lastFireTimeRef.current > 0.15 / s.firepower) {
-      lastFireTimeRef.current = now;
-      const dp = rbRef.current.translation();
-      const ry = visualGroupRef.current.rotation.y;
-      const rz = visualGroupRef.current.rotation.z;
-      _muzzleOffset.set(0, 1.2, -3);
-      _muzzleEuler.set(0, ry, rz);
-      _muzzleOffset.applyEuler(_muzzleEuler);
-      _spawnPos.set(dp.x, dp.y, dp.z).add(_muzzleOffset);
-      const dv = rbRef.current.linvel();
-      for (let i = 0; i < atk.count; i++) {
-        const sa =
-          atk.count > 1
-            ? -atk.spread / 2 + (atk.spread / (atk.count - 1)) * i
-            : 0;
-        _fireVel.set(0, 0, -50 * atk.projectileSpeed);
-        _fireEuler.set(0, ry + sa, rz);
-        _fireVel.applyEuler(_fireEuler);
-        _fireVel.x += dv.x;
-        _fireVel.y += dv.y;
-        _fireVel.z += dv.z;
-        fireballEmitter.dispatchEvent(
-          new CustomEvent("shoot", {
-            detail: {
-              position: [_spawnPos.x, _spawnPos.y, _spawnPos.z],
-              velocity: [_fireVel.x, _fireVel.y, _fireVel.z],
-              timestamp: Date.now(),
-              attack: atk,
-            },
-          }),
-        );
-      }
-    }
-
-    if (keys["q"]) joy.special = true;
-    const scd = Math.max(0, spec.cooldown - (now - lastSpecialTimeRef.current));
-    abilityState.cooldownLeft = scd;
-    abilityState.label = spec.label;
-
-    if (joy.special && scd <= 0) {
-      lastSpecialTimeRef.current = now;
-      joy.special = false;
-      switch (spec.type) {
-        case "boost": {
-          boostRef.current = spec.duration;
-          break;
-        }
-        case "barrel_roll": {
-          rollRef.current = spec.duration;
-          break;
-        }
-        case "ground_slam": {
-          rbRef.current.setLinvel({ x: 0, y: -60, z: 0 }, true);
-          const rbCur = rbRef.current;
-          setTimeout(() => {
-            const p = rbCur?.translation();
-            if (!p) return;
-            for (let a = 0; a < 8; a++) {
-              const ang = (a / 8) * Math.PI * 2;
-              fireballEmitter.dispatchEvent(
-                new CustomEvent("shoot", {
-                  detail: {
-                    position: [p.x, p.y + 1, p.z],
-                    velocity: [Math.sin(ang) * 30, 10, Math.cos(ang) * 30],
-                    timestamp: Date.now(),
-                    attack: atk,
-                  },
-                }),
-              );
-            }
-          }, 300);
-          break;
-        }
-        case "cloak": {
-          cloakRef.current = true;
-          abilityState.active = true;
-          setTimeout(() => {
-            cloakRef.current = false;
-            abilityState.active = false;
-          }, spec.duration * 1000);
-          break;
-        }
-        case "heal": {
-          abilityState.active = true;
-          setTimeout(() => {
-            abilityState.active = false;
-          }, 500);
-          break;
-        }
-        case "scatter_shot": {
-          const p = rbRef.current.translation();
-          for (let a = 0; a < 8; a++) {
-            const ang = (a / 8) * Math.PI * 2;
-            fireballEmitter.dispatchEvent(
-              new CustomEvent("shoot", {
-                detail: {
-                  position: [p.x, p.y + 1, p.z],
-                  velocity: [Math.sin(ang) * 40, 5, Math.cos(ang) * 40],
-                  timestamp: Date.now(),
-                  attack: atk,
-                },
-              }),
-            );
-          }
-          break;
-        }
-        case "updraft": {
-          const v = rbRef.current.linvel();
-          rbRef.current.setLinvel({ x: v.x, y: 40, z: v.z }, true);
-          break;
-        }
-      }
-    }
-    if (joy.special && scd > 0) joy.special = false;
-
-    if (boostRef.current > 0) {
-      boostRef.current -= delta;
-      abilityState.active = boostRef.current > 0;
-    }
-    if (rollRef.current > 0) {
-      rollRef.current -= delta;
-      abilityState.active = rollRef.current > 0;
-    }
-
-    let dx = joy.left.x;
-    let dz = -joy.throttle;
-    let dy = joy.left.y;
-    if (keys["w"] || keys["arrowup"]) dz -= 1;
-    if (keys["s"] || keys["arrowdown"]) dz += 1;
-    if (keys["a"] || keys["arrowleft"]) dx -= 1;
-    if (keys["d"] || keys["arrowright"]) dx += 1;
-    if (keys[" "]) dy += 1;
-    if (keys["shift"]) dy -= 1;
-
-    if (Math.abs(dx) > 0.01) {
-      visualGroupRef.current.rotation.y -=
-        dx * 2.5 * s.agility * settings.turnSensitivity * delta;
-    }
-
-    let targetBank = (-dx * Math.PI) / 6;
-    if (rollRef.current > 0)
-      targetBank = (rollRef.current / spec.duration) * Math.PI * 4;
-    visualGroupRef.current.rotation.z =
-      rollRef.current > 0
-        ? targetBank
-        : THREE.MathUtils.lerp(
-            visualGroupRef.current.rotation.z,
-            targetBank,
-            10 * delta,
-          );
-
-    const pos = rbRef.current.translation();
-    playerPos.x = pos.x;
-    playerPos.y = pos.y;
-    playerPos.z = pos.z;
-    const minAltitude = 1.2;
-
-    // Raycast down for ground detection
-    _ray.origin.x = pos.x;
-    _ray.origin.y = pos.y;
-    _ray.origin.z = pos.z;
-    const hit = world.castRay(_ray, 50, true);
-    const groundY = hit ? pos.y - hit.timeOfImpact : 0;
-    const altitudeAboveGround = pos.y - groundY;
-    const grounded = altitudeAboveGround < minAltitude + 0.2;
-
-    const moveSpeed = dz * maxSpeed * settings.speedSensitivity;
-    const tvx = Math.sin(visualGroupRef.current.rotation.y) * moveSpeed;
-    const tvz = Math.cos(visualGroupRef.current.rotation.y) * moveSpeed;
-
-    // Altitude: hold when no input, climb/descend with input
-    let fvy = dy * (maxSpeed * 0.75) * settings.climbSensitivity;
-    // Clamp: don't go below terrain
-    if (altitudeAboveGround < minAltitude && fvy <= 0) {
-      fvy = Math.max(fvy, (minAltitude - altitudeAboveGround) * 10);
-    }
-
-    rbRef.current.setLinvel({ x: tvx, y: fvy, z: tvz }, true);
-
-    // Dynamic animation: vary flap speed and crossfade based on movement
-    const horizontalSpeed = Math.sqrt(tvx * tvx + tvz * tvz);
-    const speedRatio = horizontalSpeed / baseMaxSpeed; // 0 = still, ~1 = full speed, ~2 = boosted
-    const isBoosting = boostRef.current > 0 || rollRef.current > 0;
-    const isFiring = now - lastFireTimeRef.current < 0.3;
-
-    if (grounded && speedRatio < 0.05) {
-      targetTimeScaleRef.current = 0.15;
-    } else if (grounded) {
-      targetTimeScaleRef.current = 0.4 + speedRatio * 0.4;
-    } else if (isBoosting) {
-      targetTimeScaleRef.current = 2.0;
-    } else {
-      targetTimeScaleRef.current = 0.5 + speedRatio * 0.9;
-    }
-
-    // Pick best animation:
-    //   Dragon_Attack2 — boost/barrel-roll (longer, dramatic)
-    //   Dragon_Attack  — firing (quick snap)
-    //   Dragon_Hit     — took damage (reactive flinch)
-    //   Dragon_Death   — dying
-    //   Dragon_Flying  — default flight
-    let wantAnim = "Dragon_Flying";
-    if (isBoosting) {
-      wantAnim = "Dragon_Attack2";
-    } else if (isFiring) {
-      wantAnim = "Dragon_Attack";
-    }
-
-    if (wantAnim !== activeAnimRef.current) {
-      const prev = actions[activeAnimRef.current];
-      const next = actions[wantAnim];
-      if (next) {
-        next.reset().fadeIn(0.25).play();
-        if (prev) prev.fadeOut(0.25);
-        activeAnimRef.current = wantAnim;
-      }
-    }
-
-    // Smoothly lerp timeScale toward target
-    const activeAction = actions[activeAnimRef.current];
-    if (activeAction) {
-      activeAction.timeScale = THREE.MathUtils.lerp(
-        activeAction.timeScale,
-        targetTimeScaleRef.current,
-        5 * delta,
-      );
-    }
-
-    // --- Walking simulation (bob + tilt when grounded) ---
-    if (grounded && speedRatio > 0.05) {
-      // Stride bob: vertical oscillation proportional to speed
-      const bobFreq = 6 + speedRatio * 8; // faster strides at higher speed
-      const bobAmp = 0.08 + speedRatio * 0.12; // subtle at slow, more at fast
-      const bob = Math.sin(now * bobFreq) * bobAmp;
-      scene.position.y = THREE.MathUtils.lerp(scene.position.y, bob, 8 * delta);
-      // Forward tilt when moving on ground
-      const tiltTarget = -0.15 - speedRatio * 0.1;
-      scene.rotation.x = THREE.MathUtils.lerp(
-        scene.rotation.x,
-        tiltTarget,
-        5 * delta,
-      );
-    } else if (grounded) {
-      // Idle on ground: gentle breathing bob
-      const idleBob = Math.sin(now * 1.5) * 0.02;
-      scene.position.y = THREE.MathUtils.lerp(
-        scene.position.y,
-        idleBob,
-        4 * delta,
-      );
-      scene.rotation.x = THREE.MathUtils.lerp(scene.rotation.x, 0, 4 * delta);
-    } else {
-      // Flying: reset to neutral
-      scene.position.y = THREE.MathUtils.lerp(scene.position.y, 0, 6 * delta);
-      // Pitch up when climbing, down when diving — proportional to input
-      const pitchTarget = -dy * 0.35 * settings.climbSensitivity;
-      scene.rotation.x = THREE.MathUtils.lerp(
-        scene.rotation.x,
-        pitchTarget,
-        4 * delta,
-      );
-    }
-
-    // --- Animate dragon material effects ---
-    animateDragonEffects(meshListRef.current, dragon.effects, dragon.id, now);
-
-    // Cloak opacity — only update meshes when state changes
-    if (cloakRef.current !== prevCloakRef.current) {
-      const opacity = cloakRef.current ? 0.2 : 1.0;
-      for (const mesh of meshListRef.current) {
-        if (mesh.material instanceof THREE.MeshStandardMaterial) {
-          mesh.material.transparent = opacity < 1;
-          mesh.material.opacity = opacity;
-        }
-      }
-      prevCloakRef.current = cloakRef.current;
-    }
-
-    if (cameraRef.current) {
-      const pos = rbRef.current.translation();
-      _camVec.set(pos.x, pos.y, pos.z);
-      const isMoving = Math.abs(dx) > 0.01 || Math.abs(dz) > 0.01;
-      if (!pan.active && isMoving) {
-        pan.yaw = THREE.MathUtils.lerp(pan.yaw, 0, 3 * delta);
-        pan.pitch = THREE.MathUtils.lerp(pan.pitch, 0, 3 * delta);
-      }
-      const cameraYaw = visualGroupRef.current.rotation.y + pan.yaw;
-      _camEuler.set(pan.pitch, cameraYaw, 0, "YXZ");
-      _camQuat.setFromEuler(_camEuler);
-      _camOffset.set(0, 3, 7).applyQuaternion(_camQuat).add(_camVec);
-      const lerpSpeed = pan.active ? 15 : 5;
-      cameraRef.current.position.lerp(_camOffset, lerpSpeed * delta);
-      _lookAt.set(_camVec.x, _camVec.y + 1.5, _camVec.z);
-      cameraRef.current.lookAt(_lookAt);
-    }
-  });
-
-  return (
-    <>
-      <RigidBody
-        ref={rbRef}
-        type="kinematicVelocity"
-        position={[0, 5, 0]}
-        enabledRotations={[false, false, false]}
-        colliders={false}
-      >
-        <group ref={visualGroupRef}>
-          <primitive object={scene} />
-        </group>
-      </RigidBody>
-      <PerspectiveCamera makeDefault ref={cameraRef} position={[0, 5, 10]} />
-    </>
-  );
-}
-
-function Projectiles() {
-  const [projectiles, setProjectiles] = useState<any[]>([]);
-  useEffect(() => {
-    const handleShoot = (e: any) => {
-      setProjectiles((prev) => [...prev, { ...e.detail, id: Math.random() }]);
-    };
-    fireballEmitter.addEventListener("shoot", handleShoot);
-    const cleanupInterval = setInterval(() => {
-      const now = Date.now();
-      setProjectiles((prev) =>
-        prev.filter(
-          (p) => now - p.timestamp < (p.attack?.lifetime ?? 3) * 1000,
-        ),
-      );
-    }, 500);
-    return () => {
-      fireballEmitter.removeEventListener("shoot", handleShoot);
-      clearInterval(cleanupInterval);
-    };
-  }, []);
-
-  return (
-    <group>
-      {projectiles.map((p) => (
-        <RigidBody
-          key={p.id}
-          position={p.position}
-          colliders="ball"
-          mass={2}
-          linearVelocity={p.velocity}
-          restitution={0.5}
-          gravityScale={p.attack?.gravity ?? 0}
-        >
-          <ProjectileMesh
-            attack={p.attack}
-            size={PROJECTILE_SIZE.GAMEPLAY * p.attack.projectileSize}
-            spin
-          />
-        </RigidBody>
-      ))}
-    </group>
-  );
-}
 
 function Forest() {
   const trees = useMemo(() => {
     const result: { x: number; z: number; scale: number }[] = [];
+    const random = seededRandom(9042);
     for (let i = 0; i < 80 && result.length < 50; i++) {
-      const x = (Math.random() - 0.5) * 120;
-      const z = (Math.random() - 0.5) * 120;
+      const x = (random() - 0.5) * 120;
+      const z = (random() - 0.5) * 120;
       if (Math.abs(x) < 15 && Math.abs(z) < 15) continue;
-      result.push({ x, z, scale: 0.5 + Math.random() * 1.5 });
+      result.push({ x, z, scale: 0.5 + random() * 1.5 });
     }
     return result;
   }, []);
@@ -587,7 +123,7 @@ function Forest() {
 // Per-layer colors: dark stone at base, ivory marble at top (RiceWing architecture)
 const CASTLE_BLOCK_COLORS = ["#b0a084", "#bcae94", "#c8bca0", "#d8cba8"];
 
-export function SmashableCastle() {
+function SmashableCastle() {
   const blockDefs = useMemo(() => {
     const arr: { key: string; lx: number; ly: number; lz: number }[] = [];
     for (let y = 0; y < 4; y++)
@@ -611,24 +147,15 @@ export function SmashableCastle() {
   const settledRef = useRef(false);
   const smashedRef = useRef(new Set<number>());
 
-  // Snapshot block positions after physics settles (~1.5s) to use as smash baselines
-  useEffect(() => {
-    const t = setTimeout(() => {
-      for (let i = 0; i < rbRefs.current.length; i++) {
-        const rb = rbRefs.current[i];
-        if (rb) {
-          const p = rb.translation();
-          settledPositions.current[i] = { x: p.x, y: p.y, z: p.z };
-        }
-      }
-      settledRef.current = true;
-    }, 1500);
-    return () => clearTimeout(t);
-  }, []);
-
   // Detect blocks displaced > 1.5 units from settled position
   useFrame(() => {
-    if (!settledRef.current) return;
+    if (gameSession.paused) return;
+    if (!settledRef.current) {
+      if (gameSession.elapsed < 1.5) return;
+      rbRefs.current.forEach((body, index) => { if (body) settledPositions.current[index] = { ...body.translation() }; });
+      settledRef.current = true;
+      return;
+    }
     for (let i = 0; i < blockDefs.length; i++) {
       if (smashedRef.current.has(i)) continue;
       const rb = rbRefs.current[i];
@@ -640,7 +167,7 @@ export function SmashableCastle() {
       const dz = t.z - sp.z;
       if (dx * dx + dy * dy + dz * dz > 2.25) {
         smashedRef.current.add(i);
-        missionEmitter.dispatchEvent(new CustomEvent("castle_block_smashed"));
+        missionEmitter.dispatchEvent(new CustomEvent("castle_block_smashed", { detail: { id: `block_${i}` } }));
       }
     }
   });
@@ -672,7 +199,8 @@ export function SmashableCastle() {
 
 function Terrain() {
   return (
-    <RigidBody type="fixed" friction={1}>
+    <RigidBody type="fixed" friction={1} colliders={false}>
+      <CuboidCollider args={[125, 0.5, 125]} position={[0, -0.5, 0]} />
       <Plane args={[250, 250]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
         <meshStandardMaterial color="#3f8a4b" />
       </Plane>
@@ -688,102 +216,6 @@ const TOWER_POSITIONS: [number, number, number][] = [
 
 const BEACON_POSITION: [number, number, number] = [0, 0, -42];
 
-function Watchtower({
-  position,
-  id,
-}: {
-  position: [number, number, number];
-  id: string;
-}) {
-  const hpRef = useRef(100);
-  const destroyed = useRef(false);
-  const meshRef = useRef<THREE.Group>(null);
-  const lastShotRef = useRef(0);
-
-  useFrame((state) => {
-    if (destroyed.current || !meshRef.current) return;
-    const now = state.clock.getElapsedTime();
-
-    // Check player projectile proximity
-    // (handled via projectile system — we check distance from tower to each projectile)
-    // Tower shoots at player every 2 seconds
-    if (now - lastShotRef.current > 2) {
-      lastShotRef.current = now;
-      const tx = position[0];
-      const ty = position[1] + 8;
-      const tz = position[2];
-      const dx = playerPos.x - tx;
-      const dy = playerPos.y - ty;
-      const dz = playerPos.z - tz;
-      const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-      if (dist < 60) {
-        const speed = 25;
-        const vx = (dx / dist) * speed;
-        const vy = (dy / dist) * speed;
-        const vz = (dz / dist) * speed;
-        missionEmitter.dispatchEvent(
-          new CustomEvent("enemy_shoot", {
-            detail: {
-              position: [tx, ty, tz],
-              velocity: [vx, vy, vz],
-              timestamp: Date.now(),
-            },
-          }),
-        );
-      }
-    }
-  });
-
-  // Listen for hits
-  useEffect(() => {
-    const handleHit = (e: Event) => {
-      if (destroyed.current) return;
-      const detail = (e as CustomEvent).detail;
-      if (detail.targetId !== id) return;
-      hpRef.current -= detail.damage;
-      if (hpRef.current <= 0) {
-        destroyed.current = true;
-        if (meshRef.current) meshRef.current.visible = false;
-        missionEmitter.dispatchEvent(
-          new CustomEvent("tower_destroyed", { detail: { id } }),
-        );
-      }
-    };
-    missionEmitter.addEventListener("tower_hit", handleHit);
-    return () => missionEmitter.removeEventListener("tower_hit", handleHit);
-  }, [id]);
-
-  return (
-    <group ref={meshRef} position={position}>
-      {/* Stone base */}
-      <mesh castShadow receiveShadow position={[0, 2, 0]}>
-        <boxGeometry args={[3, 4, 3]} />
-        <meshStandardMaterial color="#665544" roughness={0.9} />
-      </mesh>
-      {/* Tower shaft */}
-      <mesh castShadow receiveShadow position={[0, 5.5, 0]}>
-        <boxGeometry args={[2.2, 3, 2.2]} />
-        <meshStandardMaterial color="#776655" roughness={0.85} />
-      </mesh>
-      {/* Battlement top */}
-      <mesh castShadow receiveShadow position={[0, 7.5, 0]}>
-        <boxGeometry args={[3.2, 1, 3.2]} />
-        <meshStandardMaterial color="#554433" roughness={0.9} />
-      </mesh>
-      {/* Fire brazier glow */}
-      <mesh position={[0, 8.5, 0]}>
-        <sphereGeometry args={[0.5, 8, 8]} />
-        <meshBasicMaterial color="#ff4400" />
-      </mesh>
-      <pointLight
-        position={[0, 8.5, 0]}
-        color="#ff6600"
-        intensity={3}
-        distance={15}
-      />
-    </group>
-  );
-}
 
 function BeaconObj({
   position,
@@ -800,7 +232,7 @@ function BeaconObj({
       ringRef.current.rotation.y += delta * 0.5;
       ringRef.current.rotation.z += delta * 0.3;
     }
-    if (active && !reached) {
+    if (!gameSession.paused && active && !reached) {
       const dx = playerPos.x - position[0];
       const dy = playerPos.y - (position[1] + 10);
       const dz = playerPos.z - position[2];
@@ -845,81 +277,6 @@ function BeaconObj({
     </group>
   );
 }
-
-function EnemyProjectiles() {
-  const [projectiles, setProjectiles] = useState<any[]>([]);
-
-  useEffect(() => {
-    const handleShoot = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      setProjectiles((prev) => [...prev, { ...detail, id: Math.random() }]);
-    };
-    missionEmitter.addEventListener("enemy_shoot", handleShoot);
-    const cleanup = setInterval(() => {
-      const now = Date.now();
-      setProjectiles((prev) => prev.filter((p) => now - p.timestamp < 4000));
-    }, 500);
-    return () => {
-      missionEmitter.removeEventListener("enemy_shoot", handleShoot);
-      clearInterval(cleanup);
-    };
-  }, []);
-
-  // Check proximity to player each frame
-  useFrame(() => {
-    const now = Date.now();
-    for (const p of projectiles) {
-      if (p.hit) continue;
-      const age = (now - p.timestamp) / 1000;
-      const px = p.position[0] + p.velocity[0] * age;
-      const py = p.position[1] + p.velocity[1] * age;
-      const pz = p.position[2] + p.velocity[2] * age;
-      const dx = playerPos.x - px;
-      const dy = playerPos.y - py;
-      const dz = playerPos.z - pz;
-      if (dx * dx + dy * dy + dz * dz < 2.5 * 2.5) {
-        p.hit = true;
-        missionEmitter.dispatchEvent(
-          new CustomEvent("player_hit", { detail: { damage: 12 } }),
-        );
-      }
-    }
-  });
-
-  return (
-    <group>
-      {projectiles.map((p) => (
-        <EnemyProjectileMesh key={p.id} data={p} />
-      ))}
-    </group>
-  );
-}
-
-function EnemyProjectileMesh({ data }: { data: any }) {
-  const meshRef = useRef<THREE.Mesh>(null);
-
-  useFrame(() => {
-    if (!meshRef.current || data.hit) return;
-    const age = (Date.now() - data.timestamp) / 1000;
-    meshRef.current.position.set(
-      data.position[0] + data.velocity[0] * age,
-      data.position[1] + data.velocity[1] * age,
-      data.position[2] + data.velocity[2] * age,
-    );
-    meshRef.current.rotation.x += 0.2;
-    meshRef.current.rotation.z += 0.15;
-  });
-
-  if (data.hit) return null;
-
-  return (
-    <mesh ref={meshRef}>
-      <octahedronGeometry args={[0.4, 0]} />
-      <meshBasicMaterial color="#ff3300" />
-    </mesh>
-  );
-}
-
 // ---- Race Checkpoint Rings ----
 
 const CHECKPOINT_POSITIONS: [number, number, number][] = [
@@ -943,6 +300,7 @@ function CheckpointRing({
   nextIndex: number;
 }) {
   const ringRef = useRef<THREE.Mesh>(null);
+  const triggered = useRef(false);
   const isNext = index === nextIndex;
   const isPassed = index < nextIndex;
 
@@ -950,11 +308,12 @@ function CheckpointRing({
     if (ringRef.current) {
       ringRef.current.rotation.y += delta * 0.8;
     }
-    if (isNext && ringRef.current) {
+    if (!gameSession.paused && !triggered.current && isNext && ringRef.current) {
       const dx = playerPos.x - position[0];
       const dy = playerPos.y - position[1];
       const dz = playerPos.z - position[2];
       if (dx * dx + dy * dy + dz * dz < 25) {
+        triggered.current = true;
         missionEmitter.dispatchEvent(
           new CustomEvent("checkpoint_reached", { detail: { index } }),
         );
@@ -1019,70 +378,45 @@ const WAVE_TOWER_POSITIONS: [number, number, number][][] = [
   ],
 ];
 
-function WaveTowers({
-  waveIndex,
-  onWaveCleared,
-}: {
-  waveIndex: number;
-  onWaveCleared: () => void;
-}) {
-  const positions = WAVE_TOWER_POSITIONS[waveIndex] ?? [];
+function WaveTowers({ waveIndex, onWaveCleared }: { waveIndex: number; onWaveCleared: (wave: number) => void }) {
+  const positions = useMemo(() => WAVE_TOWER_POSITIONS[waveIndex] ?? [], [waveIndex]);
   const [destroyedIds, setDestroyedIds] = useState<Set<string>>(new Set());
-
+  const clearedAt = useRef<number | null>(null);
+  const emitted = useRef(false);
   useEffect(() => {
-    setDestroyedIds(new Set());
-  }, [waveIndex]);
-
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const id = (e as CustomEvent).detail.id;
-      setDestroyedIds((prev) => {
-        const next = new Set(prev);
-        next.add(id);
-        if (next.size >= positions.length) {
-          setTimeout(() => onWaveCleared(), 500);
-        }
-        return next;
-      });
+    const handler = (event: Event) => {
+      const id = (event as CustomEvent<{ id: string }>).detail.id;
+      if (!positions.some((_, i) => id === `wave_${waveIndex}_tower_${i}`)) return;
+      setDestroyedIds(previous => new Set(previous).add(id));
     };
     missionEmitter.addEventListener("tower_destroyed", handler);
     return () => missionEmitter.removeEventListener("tower_destroyed", handler);
-  }, [positions.length, onWaveCleared]);
-
-  return (
-    <group>
-      {positions.map((pos, i) => {
-        const id = `wave_${waveIndex}_tower_${i}`;
-        if (destroyedIds.has(id)) return null;
-        return <Watchtower key={id} position={pos} id={id} />;
-      })}
-    </group>
-  );
+  }, [waveIndex, positions]);
+  useFrame(() => {
+    if (gameSession.paused || emitted.current || destroyedIds.size < positions.length) return;
+    clearedAt.current ??= gameSession.elapsed + 0.5;
+    if (gameSession.elapsed >= clearedAt.current) { emitted.current = true; onWaveCleared(waveIndex); }
+  });
+  return <group>{positions.map((position, i) => {
+    const id = `wave_${waveIndex}_tower_${i}`;
+    return destroyedIds.has(id) ? null : <Watchtower key={id} position={position} id={id} />;
+  })}</group>;
 }
 
 // ---- Mission Timer ----
 
-function MissionTimer({
-  missionState,
-  onTick,
-}: {
-  missionState: MissionRuntimeState;
-  onTick: (elapsed: number) => void;
-}) {
-  const startRef = useRef(Date.now());
-
-  useEffect(() => {
-    startRef.current = Date.now();
-  }, [missionState.missionId]);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const elapsed = (Date.now() - startRef.current) / 1000;
-      onTick(elapsed);
-    }, 200);
-    return () => clearInterval(interval);
-  }, [onTick]);
-
+function MissionTimer({ onTick }: { onTick?: (elapsed: number) => void }) {
+  const pending = useRef(0);
+  useFrame((_, delta) => {
+    if (gameSession.paused || !gameSession.ready) return;
+    const dt = Math.min(delta, 1 / 15);
+    gameSession.elapsed += dt;
+    pending.current += dt;
+    if (pending.current >= 0.2) {
+      pending.current = 0;
+      onTick?.(gameSession.elapsed);
+    }
+  }, -3);
   return null;
 }
 
@@ -1215,9 +549,6 @@ function DragonSwitcher({
   const tribeDragons = DRAGON_TYPES.filter((d) => d.tribe === tribe);
   const currentAccent = getReadableAccent(current);
 
-  useEffect(() => {
-    setTribe(current.tribe);
-  }, [current.tribe]);
 
   useEffect(() => {
     if (!open) return;
@@ -1414,7 +745,8 @@ function OpenWorldTerrain() {
   return (
     <>
       {/* Physics plane + Pyrrhia base (green) */}
-      <RigidBody type="fixed" friction={1}>
+      <RigidBody type="fixed" friction={1} colliders={false}>
+        <CuboidCollider args={[200, 0.5, 200]} position={[0, -0.5, 0]} />
         <Plane args={[400, 400]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
           <meshStandardMaterial color="#3f8a4b" />
         </Plane>
@@ -1676,7 +1008,7 @@ function WorldBeacon({
       ringRef.current.rotation.z += delta * 0.28;
     }
     // Proximity detection — fires once
-    if (!triggeredRef.current) {
+    if (!gameSession.paused && !triggeredRef.current) {
       const dx = playerPos.x - pos[0];
       const dy = playerPos.y - (pos[1] + 10);
       const dz = playerPos.z - pos[2];
@@ -1913,11 +1245,12 @@ function OpenWorldView({
   const [mapPlayerPos, setMapPlayerPos] = useState({ x: 0, z: 0 });
   const [showSettings, setShowSettings] = useState(false);
   const [controlScheme, setControlScheme] = useState(settings.scheme);
-  const bannerKeyRef = useRef(0);
+  const [bannerKey, setBannerKey] = useState(0);
+  const { paused, manualPause, togglePause } = useWorldSession(showSettings || showMap);
 
   const handleRegionChange = useCallback((r: WorldRegion) => {
     setCurrentRegion(r);
-    bannerKeyRef.current += 1;
+    setBannerKey(previous => previous + 1);
     setEntryBanner(r);
   }, []);
 
@@ -1969,25 +1302,15 @@ function OpenWorldView({
         touchAction: "none",
       }}
     >
+      <SceneBoundary>
       <Canvas
         shadows={{ type: THREE.PCFShadowMap }}
         camera={{ position: [0, 5, 10], fov: 60 }}
-        dpr={[1, 1.5]}
+        dpr={[1, preset.maxDpr]}
       >
-        <Sky sunPosition={[100, 20, 100]} />
-        <Environment preset="sunset" />
-        <ambientLight intensity={0.3} />
-        <directionalLight
-          castShadow
-          position={[50, 50, 20]}
-          intensity={1.2}
-          shadow-mapSize={[2048, 2048]}
-          shadow-camera-left={-80}
-          shadow-camera-right={80}
-          shadow-camera-top={80}
-          shadow-camera-bottom={-80}
-        />
-        <Physics debug={false}>
+        <Atmosphere region={currentRegion.id} />
+        <MissionTimer />
+        <Physics debug={false} paused={paused}>
           <OpenWorldTerrain />
           <OpenWorldForest />
           <PantalaDecor />
@@ -2000,11 +1323,14 @@ function OpenWorldView({
               onDiscovered={() => handleBeaconDiscovered(r.id)}
             />
           ))}
-          <BlockyDragon dragon={dragon} />
+          <PlayerDragon dragon={dragon} />
           <Projectiles />
+          <CombatFeedback />
         </Physics>
         <RegionTracker onRegionChange={handleRegionChange} />
+        <VRScene />
       </Canvas>
+      </SceneBoundary>
 
       {/* Camera pan overlay */}
       <div
@@ -2037,24 +1363,27 @@ function OpenWorldView({
           }
         }}
         onPointerUp={(e) => {
-          if (e.target instanceof Element)
+          if (e.target instanceof Element && e.target.hasPointerCapture(e.pointerId))
             e.target.releasePointerCapture(e.pointerId);
           if (pan.active === e.pointerId) pan.active = 0;
         }}
         onPointerCancel={(e) => {
-          if (e.target instanceof Element)
+          if (e.target instanceof Element && e.target.hasPointerCapture(e.pointerId))
             e.target.releasePointerCapture(e.pointerId);
           if (pan.active === e.pointerId) pan.active = 0;
         }}
       />
 
+      <VRLaunch />
+      <FlightHUD dragon={dragon} paused={paused} onPause={togglePause} />
+      {manualPause && <div className="flight-pause-overlay"><h2>Flight paused</h2><button type="button" onClick={togglePause}>Resume flight</button></div>}
       <OpenWorldHUD
         region={currentRegion}
         discoveredBeacons={discoveredBeacons}
       />
 
       {entryBanner && (
-        <div key={bannerKeyRef.current} className="ow-entry-banner">
+        <div key={bannerKey} className="ow-entry-banner">
           <div
             className="ow-entry-banner-name"
             style={{ color: entryBanner.textColor }}
@@ -2065,11 +1394,11 @@ function OpenWorldView({
         </div>
       )}
 
-      {controlScheme === "buttons" ? (
+      {!paused && isTouchDevice && (controlScheme === "buttons" ? (
         <DPadControls joy={joy} abilityState={abilityState} />
       ) : (
-        <TouchControls dragon={dragon} joy={joy} abilityState={abilityState} />
-      )}
+        <TouchControls dragon={dragon} joy={joy} abilityState={abilityState} maxDist={preset.joystickMaxDist} />
+      ))}
 
       <DragonSwitcher current={dragon} onSwap={onSwap} />
 
@@ -2127,7 +1456,7 @@ function GameWorld({
   onSwap: (d: DragonType) => void;
   onHome: () => void;
   missionState: MissionRuntimeState;
-  onMissionUpdate: (s: MissionRuntimeState) => void;
+  onMissionUpdate: Dispatch<SetStateAction<MissionRuntimeState>>;
 }) {
   const [damageFlash, setDamageFlash] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -2136,134 +1465,64 @@ function GameWorld({
     missionState.completedObjectiveIds.includes("destroy_towers");
   const missionType = mission.type;
 
-  // Collect all active tower positions for projectile collision checks
-  const activeTowerPositions = useMemo(() => {
-    if (missionType === "fortress_raid") return TOWER_POSITIONS;
-    if (missionType === "hunter_ambush") {
-      return WAVE_TOWER_POSITIONS[missionState.waveIndex] ?? [];
-    }
-    return [];
-  }, [missionType, missionState.waveIndex]);
-
-  // Listen for mission events
+  const flashTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const { paused, manualPause, togglePause } = useWorldSession(showSettings);
   useEffect(() => {
-    const onTowerDestroyed = () => {
-      if (missionType === "fortress_raid") {
-        onMissionUpdate(
-          advanceObjective(missionState, mission, "destroy_towers"),
-        );
-      }
+    const progress = (objective: string, id: string) => {
+      if (gameSession.paused) return;
+      const elapsed = gameSession.elapsed;
+      onMissionUpdate(previous => advanceObjective(updateMissionTime(previous, mission, elapsed), mission, objective, 1, id));
     };
-    const onBeaconReached = () => {
-      if (missionType === "fortress_raid" && beaconActive) {
-        onMissionUpdate(
-          advanceObjective(missionState, mission, "activate_beacon"),
-        );
-      }
+    const onTowerDestroyed = (event: Event) => {
+      if (missionType === "fortress_raid") progress("destroy_towers", (event as CustomEvent<{ id: string }>).detail.id);
     };
-    const onCheckpoint = () => {
-      if (missionType === "beacon_run") {
-        onMissionUpdate(advanceObjective(missionState, mission, "checkpoints"));
-      }
+    const onBeaconReached = () => { if (missionType === "fortress_raid") progress("activate_beacon", "beacon"); };
+    const onCheckpoint = (event: Event) => {
+      if (missionType !== "beacon_run" || gameSession.paused) return;
+      const index = (event as CustomEvent<{ index: number }>).detail.index;
+      const elapsed = gameSession.elapsed;
+      onMissionUpdate(previous => index === (previous.progress.checkpoints ?? 0)
+        ? advanceObjective(updateMissionTime(previous, mission, elapsed), mission, "checkpoints", 1, `checkpoint_${index}`)
+        : previous);
     };
-    const onPlayerHit = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      onMissionUpdate(applyDamage(missionState, detail.damage));
+    const onPlayerHit = (event: Event) => {
+      if (gameSession.paused || playerStatus.cloaked || playerStatus.invulnerable) return;
+      const amount = (event as CustomEvent<{ damage: number }>).detail.damage / Math.max(0.25, dragon.stats.armor);
+      const elapsed = gameSession.elapsed;
+      onMissionUpdate(previous => applyDamage(updateMissionTime(previous, mission, elapsed), amount));
       setDamageFlash(true);
-      setTimeout(() => setDamageFlash(false), 200);
+      clearTimeout(flashTimeout.current);
+      flashTimeout.current = setTimeout(() => setDamageFlash(false), 200);
     };
-    const onBlockSmashed = () => {
-      if (missionType === "jade_citadel") {
-        onMissionUpdate(
-          advanceObjective(missionState, mission, "smash_blocks"),
-        );
-      }
+    const onHeal = (event: Event) => {
+      const amount = (event as CustomEvent<{ amount: number }>).detail.amount;
+      onMissionUpdate(previous => applyHeal(previous, amount));
+    };
+    const onBlockSmashed = (event: Event) => {
+      if (missionType === "jade_citadel") progress("smash_blocks", (event as CustomEvent<{ id: string }>).detail.id);
     };
     missionEmitter.addEventListener("tower_destroyed", onTowerDestroyed);
     missionEmitter.addEventListener("beacon_reached", onBeaconReached);
     missionEmitter.addEventListener("checkpoint_reached", onCheckpoint);
     missionEmitter.addEventListener("player_hit", onPlayerHit);
+    missionEmitter.addEventListener("player_heal", onHeal);
     missionEmitter.addEventListener("castle_block_smashed", onBlockSmashed);
     return () => {
+      clearTimeout(flashTimeout.current);
       missionEmitter.removeEventListener("tower_destroyed", onTowerDestroyed);
       missionEmitter.removeEventListener("beacon_reached", onBeaconReached);
       missionEmitter.removeEventListener("checkpoint_reached", onCheckpoint);
       missionEmitter.removeEventListener("player_hit", onPlayerHit);
+      missionEmitter.removeEventListener("player_heal", onHeal);
       missionEmitter.removeEventListener("castle_block_smashed", onBlockSmashed);
     };
-  }, [missionType, beaconActive, missionState, mission, onMissionUpdate]);
-
-  // Player projectile vs tower proximity check
-  useEffect(() => {
-    if (activeTowerPositions.length === 0) return;
-    const handleShoot = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      const checkInterval = setInterval(() => {
-        const age = (Date.now() - detail.timestamp) / 1000;
-        if (age > 3) {
-          clearInterval(checkInterval);
-          return;
-        }
-        const px = detail.position[0] + detail.velocity[0] * age;
-        const py = detail.position[1] + detail.velocity[1] * age;
-        const pz = detail.position[2] + detail.velocity[2] * age;
-        for (let i = 0; i < activeTowerPositions.length; i++) {
-          const [tx, , tz] = activeTowerPositions[i];
-          const ty = 4;
-          const dx = px - tx;
-          const dy = py - ty;
-          const dz = pz - tz;
-          if (dx * dx + dy * dy + dz * dz < 16) {
-            const tId =
-              missionType === "fortress_raid"
-                ? `tower_${i}`
-                : `wave_${missionState.waveIndex}_tower_${i}`;
-            missionEmitter.dispatchEvent(
-              new CustomEvent("tower_hit", {
-                detail: { targetId: tId, damage: 35 },
-              }),
-            );
-            clearInterval(checkInterval);
-            return;
-          }
-        }
-      }, 50);
-    };
-    fireballEmitter.addEventListener("shoot", handleShoot);
-    return () => fireballEmitter.removeEventListener("shoot", handleShoot);
-  }, [activeTowerPositions, missionType, missionState.waveIndex]);
-
-  // Wave advancement for survival missions
-  const handleWaveCleared = useCallback(() => {
-    const next = { ...missionState };
-    next.waveIndex = missionState.waveIndex + 1;
-    next.progress = { ...next.progress };
-    next.progress["survive_waves"] = next.waveIndex;
-    if (next.waveIndex >= 3) {
-      next.completedObjectiveIds = [
-        ...next.completedObjectiveIds,
-        "survive_waves",
-      ];
-      next.activeObjectiveIndex = mission.objectives.length;
-      next.succeeded = true;
-    }
-    onMissionUpdate(next);
-  }, [missionState, mission, onMissionUpdate]);
-
-  // Timer tick handler
-  const handleTimerTick = useCallback(
-    (elapsed: number) => {
-      onMissionUpdate({ ...missionState, elapsedTime: elapsed });
-      if (mission.timeLimitSeconds && elapsed >= mission.timeLimitSeconds) {
-        onMissionUpdate({
-          ...missionState,
-          elapsedTime: elapsed,
-          failed: true,
-        });
-      }
-    },
-    [missionState, mission, onMissionUpdate],
-  );
+  }, [missionType, mission, onMissionUpdate, dragon.stats.armor]);
+  const handleWaveCleared = useCallback((wave: number) => {
+    onMissionUpdate(previous => completeWave(previous, mission, wave));
+  }, [mission, onMissionUpdate]);
+  const handleTimerTick = useCallback((elapsed: number) => {
+    onMissionUpdate(previous => updateMissionTime(previous, mission, elapsed));
+  }, [mission, onMissionUpdate]);
 
   return (
     <div
@@ -2276,25 +1535,15 @@ function GameWorld({
         touchAction: "none",
       }}
     >
+      <SceneBoundary>
       <Canvas
         shadows={{ type: THREE.PCFShadowMap }}
         camera={{ position: [0, 5, 10], fov: 60 }}
         dpr={[1, preset.maxDpr]}
       >
-        <Sky sunPosition={[100, 20, 100]} />
-        <Environment preset="sunset" />
-        <ambientLight intensity={0.3} />
-        <directionalLight
-          castShadow
-          position={[50, 50, 20]}
-          intensity={1.2}
-          shadow-mapSize={[preset.shadowMapSize, preset.shadowMapSize]}
-          shadow-camera-left={-40}
-          shadow-camera-right={40}
-          shadow-camera-top={40}
-          shadow-camera-bottom={-40}
-        />
-        <Physics debug={false}>
+        <Atmosphere region={mission.region} />
+        <MissionTimer onTick={handleTimerTick} />
+        <Physics debug={false} paused={paused}>
           <Terrain />
           <Forest />
 
@@ -2304,6 +1553,7 @@ function GameWorld({
               {TOWER_POSITIONS.map((pos, i) => (
                 <Watchtower key={i} position={pos} id={`tower_${i}`} />
               ))}
+              <FlyingRaider />
               <BeaconObj position={BEACON_POSITION} active={beaconActive} />
             </>
           )}
@@ -2318,6 +1568,7 @@ function GameWorld({
           {/* Hunter Ambush: wave-spawned towers */}
           {missionType === "hunter_ambush" && missionState.waveIndex < 3 && (
             <WaveTowers
+              key={missionState.waveIndex}
               waveIndex={missionState.waveIndex}
               onWaveCleared={handleWaveCleared}
             />
@@ -2326,15 +1577,17 @@ function GameWorld({
           {/* Jade Citadel Strike: smashable castle */}
           {missionType === "jade_citadel" && <SmashableCastle />}
 
-          <BlockyDragon dragon={dragon} />
+          <PlayerDragon dragon={dragon} />
           <Projectiles />
+          <CombatFeedback />
           {missionType !== "beacon_run" && missionType !== "jade_citadel" && (
             <EnemyProjectiles />
           )}
         </Physics>
+        <VRScene mission={mission} missionState={missionState} />
       </Canvas>
+      </SceneBoundary>
 
-      <MissionTimer missionState={missionState} onTick={handleTimerTick} />
 
       <div
         style={{
@@ -2366,22 +1619,25 @@ function GameWorld({
           }
         }}
         onPointerUp={(e) => {
-          if (e.target instanceof Element)
+          if (e.target instanceof Element && e.target.hasPointerCapture(e.pointerId))
             e.target.releasePointerCapture(e.pointerId);
           if (pan.active === e.pointerId) pan.active = 0;
         }}
         onPointerCancel={(e) => {
-          if (e.target instanceof Element)
+          if (e.target instanceof Element && e.target.hasPointerCapture(e.pointerId))
             e.target.releasePointerCapture(e.pointerId);
           if (pan.active === e.pointerId) pan.active = 0;
         }}
       />
 
+      <VRLaunch />
+      <FlightHUD dragon={dragon} paused={paused} onPause={togglePause} />
+      {manualPause && <div className="flight-pause-overlay"><h2>Flight paused</h2><button type="button" onClick={togglePause}>Resume flight</button></div>}
       <MissionHUD missionState={missionState} />
       <HealthBar hp={missionState.playerHp} maxHp={missionState.maxHp} />
       <div className={`damage-vignette ${damageFlash ? "active" : ""}`} />
 
-      {isTouchDevice &&
+      {!paused && isTouchDevice &&
         (controlScheme === "buttons" ? (
           <DPadControls joy={joy} abilityState={abilityState} />
         ) : (
@@ -2437,16 +1693,6 @@ export default function App() {
   const [missionState, setMissionState] = useState<MissionRuntimeState>(
     createMissionState(MISSIONS[0]),
   );
-
-  // Check for mission end conditions
-  useEffect(() => {
-    if (screen !== "in_mission") return;
-    if (missionState.succeeded) {
-      setScreen("mission_success");
-    } else if (missionState.failed) {
-      setScreen("mission_fail");
-    }
-  }, [missionState, screen]);
 
   if (screen === "dragon_select" || !selectedDragon) {
     return (
@@ -2511,12 +1757,12 @@ export default function App() {
     );
   }
 
-  if (screen === "mission_success" || screen === "mission_fail") {
+  if (screen === "in_mission" && (missionState.succeeded || missionState.failed)) {
     return (
       <MissionResult
         mission={currentMission}
         dragon={selectedDragon}
-        success={screen === "mission_success"}
+        success={missionState.succeeded}
         missionState={missionState}
         onRetry={() => {
           setMissionState(createMissionState(currentMission));

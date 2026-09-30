@@ -4,6 +4,7 @@
 
 import { device } from "../utils/device";
 import type { DeviceClass } from "../utils/device";
+import { validateSettings } from "./validateSettings";
 
 export interface ControlSettings {
   /** 'joystick' = analogue stick (default), 'buttons' = D-pad for young kids */
@@ -18,6 +19,7 @@ export interface ControlSettings {
 
 /** Device-tuned defaults — iPhones get D-pad + gentler sensitivity by default. */
 const DEVICE_DEFAULTS: Record<DeviceClass, ControlSettings> = {
+  quest: { scheme: "joystick", turnSensitivity: 0.8, climbSensitivity: 0.5, speedSensitivity: 0.6 },
   iphone: {
     scheme: "buttons", // D-pad is easier on small screens
     turnSensitivity: 0.8,
@@ -56,9 +58,7 @@ export function loadSettings(): void {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (parsed && typeof parsed === "object") {
-        Object.assign(settings, parsed);
-      }
+      Object.assign(settings, validateSettings(parsed, DEFAULTS));
     }
   } catch {
     // corrupt data — keep defaults
@@ -66,13 +66,13 @@ export function loadSettings(): void {
 }
 
 export function saveSettings(partial: Partial<ControlSettings>): void {
-  Object.assign(settings, partial);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+  Object.assign(settings, validateSettings({ ...settings, ...partial }, DEFAULTS));
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(settings)); } catch { /* Continue with in-memory settings. */ }
 }
 
 export function resetSettings(): void {
   Object.assign(settings, DEFAULTS);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(settings)); } catch { /* Continue with in-memory settings. */ }
 }
 
 export { DEFAULTS as CONTROL_DEFAULTS };

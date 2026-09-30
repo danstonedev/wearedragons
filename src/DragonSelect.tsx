@@ -14,6 +14,8 @@ import type { DragonType } from "./dragons";
 import ProjectileMesh from "./ProjectileMesh";
 import { PROJECTILE_SIZE, MAX_STAT } from "./constants";
 import "./DragonSelect.css";
+import SceneBoundary from "./components/SceneBoundary";
+import { preset } from "./utils/device";
 
 import { SkeletonUtils } from "three-stdlib";
 
@@ -86,6 +88,18 @@ function DragonModel({
   }, [scene, colors, effects]);
 
   const { actions, mixer } = useAnimations(animations, groupRef);
+
+  useEffect(() => () => {
+    mixer.uncacheRoot(clonedScene);
+    const ownedMaterials = new Set<THREE.Material>();
+    clonedScene.traverse(child => {
+      if ((child as THREE.Mesh).isMesh) {
+        const material = (child as THREE.Mesh).material;
+        for (const item of Array.isArray(material) ? material : [material]) ownedMaterials.add(item);
+      }
+    });
+    for (const material of ownedMaterials) material.dispose();
+  }, [clonedScene, mixer]);
 
   // Start flying on mount
   useEffect(() => {
@@ -212,8 +226,10 @@ function DragonPreview3D({
     previewAnim?.name === "Dragon_Attack" ? previewAnim.key : 0;
 
   return (
+    <SceneBoundary>
     <Canvas
       camera={{ position: [0, 0.5, 3], fov: 40 }}
+      dpr={[1, Math.min(1.25, preset.maxDpr)]}
       style={{ background: "transparent" }}
       gl={{ alpha: true, antialias: true }}
     >
@@ -236,6 +252,7 @@ function DragonPreview3D({
         />
       </Suspense>
     </Canvas>
+    </SceneBoundary>
   );
 }
 
@@ -391,8 +408,6 @@ export default function DragonSelect({
   const tribeDragons = DRAGON_TYPES.filter((d) => d.tribe === selectedTribe);
 
   useEffect(() => {
-    const first = DRAGON_TYPES.find((d) => d.tribe === selectedTribe);
-    if (first) setSelectedDragon(first);
     if (carouselRef.current) {
       carouselRef.current.scrollTo({ left: 0, behavior: "smooth" });
     }
@@ -451,7 +466,11 @@ export default function DragonSelect({
               key={tribe.id}
               type="button"
               className={`tribe-tab ${isActive ? "active" : ""}`}
-              onClick={() => setSelectedTribe(tribe.id)}
+              onClick={() => {
+                setSelectedTribe(tribe.id);
+                const first = DRAGON_TYPES.find(dragon => dragon.tribe === tribe.id);
+                if (first) setSelectedDragon(first);
+              }}
               style={
                 isActive
                   ? {

@@ -2,10 +2,11 @@
    Device Detection — iPad / iPhone / Desktop
    ============================================================ */
 
-export type DeviceClass = "iphone" | "ipad" | "mobile" | "desktop";
+export type DeviceClass = "iphone" | "ipad" | "mobile" | "desktop" | "quest";
 
 function detect(): DeviceClass {
   const ua = navigator.userAgent;
+  if (/OculusBrowser|Quest/i.test(ua)) return "quest";
 
   // iPad: explicit "iPad" in UA, or modern iPadOS (reports as Macintosh but has touch)
   if (/iPad/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1))
@@ -23,7 +24,7 @@ function detect(): DeviceClass {
 export const device: DeviceClass = detect();
 
 /** True on any touch-primary device (iPhone, iPad, Android). */
-export const isTouchDevice: boolean = device !== "desktop";
+export const isTouchDevice: boolean = device !== "desktop" && device !== "quest";
 
 /** True specifically on Apple mobile hardware. */
 export const isIOS: boolean = device === "iphone" || device === "ipad";
@@ -42,6 +43,7 @@ export interface DevicePreset {
 }
 
 const PRESETS: Record<DeviceClass, DevicePreset> = {
+  quest: { maxDpr: 1, shadowMapSize: 1024, joystickMaxDist: 64, showTouchControls: false },
   iphone: {
     maxDpr: 2, // iPhone 3x is too expensive for realtime 3D; cap at 2
     shadowMapSize: 1024,
