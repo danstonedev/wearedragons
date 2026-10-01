@@ -26,14 +26,36 @@ export default function FlightAudio() {
       oscillator.start(now); oscillator.stop(now + duration);
       oscillator.onended = () => { oscillator.disconnect(); gain.disconnect(); };
     };
+    // A clean bell tone for treasure; delay lets several notes form a short phrase.
+    const chime = (frequency: number, volume: number, duration: number, delay = 0) => {
+      const audio = rig.current;
+      if (!audio || gameSession.paused || audio.context.state !== "running" || audio.master.gain.value === 0) return;
+      const start = audio.context.currentTime + delay;
+      const oscillator = audio.context.createOscillator();
+      const gain = audio.context.createGain();
+      oscillator.type = "triangle";
+      oscillator.frequency.setValueAtTime(frequency, start);
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.linearRampToValueAtTime(volume, start + 0.012);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+      oscillator.connect(gain).connect(audio.master);
+      oscillator.start(start); oscillator.stop(start + duration + 0.02);
+      oscillator.onended = () => { oscillator.disconnect(); gain.disconnect(); };
+    };
     const shot = () => {
       if (gameSession.elapsed - lastShot.current < 0.1) return;
       lastShot.current = gameSession.elapsed;
       pulse(180, 0.12, 0.15);
     };
-    const impact = () => pulse(75, 0.2, 0.24);
+    const impact = (event: Event) => { if (!(event as CustomEvent<{ quiet?: boolean }>).detail?.quiet) pulse(75, 0.2, 0.24); };
+    const snatched = () => { chime(880, 0.11, 0.35); chime(1318, 0.09, 0.45, 0.08); };
+    const banked = () => { [988, 1175, 1319, 1568, 1976].forEach((note, i) => chime(note, 0.08, 0.4, i * 0.06)); };
+    const dropped = () => pulse(320, 0.07, 0.22);
     fireballEmitter.addEventListener("shoot", shot);
     missionEmitter.addEventListener("impact", impact);
+    missionEmitter.addEventListener("loot_snatched", snatched);
+    missionEmitter.addEventListener("loot_banked", banked);
+    missionEmitter.addEventListener("loot_dropped", dropped);
     const timer = window.setInterval(() => {
       const audio = rig.current;
       if (!audio || audio.context.state !== "running") return;
@@ -57,6 +79,9 @@ export default function FlightAudio() {
       window.clearInterval(timer);
       fireballEmitter.removeEventListener("shoot", shot);
       missionEmitter.removeEventListener("impact", impact);
+      missionEmitter.removeEventListener("loot_snatched", snatched);
+      missionEmitter.removeEventListener("loot_banked", banked);
+      missionEmitter.removeEventListener("loot_dropped", dropped);
       const audio = rig.current;
       rig.current = null;
       if (audio) void audio.context.close().catch(() => {});

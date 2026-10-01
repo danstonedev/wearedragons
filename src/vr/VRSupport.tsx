@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { MissionDefinition, MissionRuntimeState } from "../game/missions";
+import type { VRSceneProps } from "./VRFlight";
 
 type VRRuntime = typeof import("./VRFlight");
 let runtimePromise: Promise<VRRuntime | null> | undefined;
@@ -23,12 +23,12 @@ function useVRRuntime() {
   return runtime;
 }
 
-export function VRLaunch() {
+export function VRLaunch({ mode = "flight" }: { mode?: "flight" | "scavenger" }) {
   const runtime = useVRRuntime();
-  return runtime ? <runtime.VRLaunch /> : null;
+  return runtime ? <runtime.VRLaunch mode={mode} /> : null;
 }
 
-export function VRScene(props: { mission?: MissionDefinition; missionState?: MissionRuntimeState }) {
+export function VRScene(props: VRSceneProps) {
   const runtime = useVRRuntime();
   // This sibling mounts independently; loading XR cannot reset an active world.
   return runtime ? <runtime.VRScene {...props} /> : null;

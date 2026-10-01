@@ -8,7 +8,9 @@ export type AppScreen =
   | "in_mission"
   | "mission_success"
   | "mission_fail"
-  | "open_world";
+  | "open_world"
+  | "scavenger_select"
+  | "scavenger_raid";
 
 export type MissionObjectiveType =
   | "destroy_targets"

@@ -5,11 +5,13 @@ export default function ModeSelect({
   dragon,
   onMissions,
   onOpenWorld,
+  onScavengers,
   onBack,
 }: {
   dragon: DragonType;
   onMissions: () => void;
   onOpenWorld: () => void;
+  onScavengers: () => void;
   onBack: () => void;
 }) {
   const accent =
@@ -51,11 +53,27 @@ export default function ModeSelect({
             <div className="mode-card-icon">◈</div>
             <div className="mode-card-label">OPEN WORLD</div>
             <div className="mode-card-desc">
-              Fly freely across Pyrrhia, Pantala, and Glaeryus. Discover
-              hidden beacons, explore each region's terrain, and roam without
-              objectives or fail states.
+              Fly freely across Pyrrhia, Pantala, and Glaeryus. Swoop low to
+              snatch treasure in your talons, from treetops, rock spires, and
+              drifting sky lanterns, and carry it home to grow your hoard.
             </div>
-            <div className="mode-card-tag">3 REGIONS · 3 BEACONS</div>
+            <div className="mode-card-tag">24 TREASURES · YOUR HOARD</div>
+          </button>
+
+          <button
+            type="button"
+            className="mode-card"
+            onClick={onScavengers}
+            style={{ "--mode-accent": "#e7b26a" } as CSSProperties}
+          >
+            <div className="mode-card-icon">☾</div>
+            <div className="mode-card-label">SCAVENGERS</div>
+            <div className="mode-card-desc">
+              Switch sides. Play as a human from the underground Burrows,
+              sneak into a dragon's lair, steal from its hoard, and escape
+              before it wakes up and catches you.
+            </div>
+            <div className="mode-card-tag">3 LAIRS · STEALTH</div>
           </button>
         </div>
 

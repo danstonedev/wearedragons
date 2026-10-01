@@ -21,7 +21,7 @@ export default defineConfig([
     },
   },
   {
-    files: ['src/world/**/*.tsx', 'src/vr/VRFlight.tsx', 'src/DragonSelect.tsx'],
+    files: ['src/world/**/*.tsx', 'src/scavenger/**/*.tsx', 'src/vr/*.tsx', 'src/DragonSelect.tsx'],
     rules: {
       // R3F intentionally mutates owned Three.js / Rapier objects in its frame loop.
       // React Compiler's immutability analysis cannot distinguish these from React data.

@@ -63,6 +63,20 @@ Visual banking now depends on movement speed and is suppressed on the ground. Gl
 
 Test a heavy and an agile dragon on the same route; compare powered turns, dives, climbs, gliding, braking, slope approaches, and boost/special recovery. Listen at normal headset volume and verify no sound persists after leaving play. Measure Quest comfort and performance before tuning the speed cap or adding camera effects.
 
+## Treasure hoarding and Scavengers delivered
+
+Free flight now has a reason to roam: 24 unique treasures across the three regions (ground, treetops, spires, sky lanterns, two-talon chests) and 30 common finds that return each flight. Snatching is a low swoop; carrying has weight; banking happens at a hoard nest beside the spawn point that visibly grows and persists. Tribe tastes make dragon choice matter for treasure value. In VR the controllers puppeteer the hind talons, so players reach and grab while the sticks keep flying.
+
+Scavengers flips the fantasy: a human from the Burrows sneaks into three dragon lairs. The rules are readable on purpose. Snores have a rhythm, light pools show where you are visible, sight cones are drawn on the floor, coins jingle, and pebbles redirect attention. Each prize sits next to a sleeping snout as a timing puzzle. VR raids are first person at human scale with physical crouching.
+
+| Test | Observe | Pass condition |
+| --- | --- | --- |
+| First treasure, desktop and Quest | Can the player find a glint, snatch it, and get it home? | Banks a treasure within three minutes without reading help text |
+| VR claws | Reach comfort, accidental grabs while braking/gliding, throw feel | Grabs feel intentional; relaxed hands never grab by accident |
+| First raid | Understands snores, light, and the exit | Escapes with loot or can explain why they were caught |
+| Prize steal | Timing the snore, reaction to a stir | Players attempt the timing and recover from a stir at least once |
+| Quest lair performance | Frame timing with point lights and three dragons | Stable at the session's frame rate in Frostfang Hollow |
+
 ## Prioritized production backlog
 
 | Priority | Upgrade | Player benefit | Completion evidence |

@@ -3,7 +3,7 @@ import { abilityState, playerStatus, combatFeedback, gameSession, joy } from "..
 import FlightAudio from "./FlightAudio";
 import type { DragonType } from "../dragons";
 
-export default function FlightHUD({ dragon, paused, onPause }: { dragon: DragonType; paused: boolean; onPause: () => void }) {
+export default function FlightHUD({ dragon, paused, onPause, hint }: { dragon: DragonType; paused: boolean; onPause: () => void; hint?: string }) {
   const [status, setStatus] = useState({ cooldown: 0, speed: 0, mode: "hover", message: "" });
   useEffect(() => {
     const timer = window.setInterval(() => setStatus({ cooldown: abilityState.cooldownLeft, speed: playerStatus.speed, mode: playerStatus.flightMode, message: gameSession.elapsed - combatFeedback.destroyedAt < 0.7 ? "TARGET DESTROYED" : gameSession.elapsed - combatFeedback.hitAt < 0.4 ? "HIT CONFIRMED" : "" }), 100);
@@ -11,7 +11,7 @@ export default function FlightHUD({ dragon, paused, onPause }: { dragon: DragonT
   }, []);
   return <>
     <div className="flight-controls-hint">
-      WASD / arrows: fly · Space / Shift: climb / dive · Hold G: glide · B: brake · F: fire · Q: {dragon.special.label.toLowerCase()}
+      WASD / arrows: fly · Space / Shift: climb / dive · Hold G: glide · B: brake · F: fire · Q: {dragon.special.label.toLowerCase()}{hint ? ` · ${hint}` : ""}
     </div>
     <button type="button" className="flight-pause" onClick={onPause}>{paused ? "RESUME" : "PAUSE"} [ESC]</button>
     <FlightAudio />
