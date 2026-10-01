@@ -1,19 +1,7 @@
 export type LandscapeKind = "ridge" | "open";
 import { coastalHeight, shorelineZ } from "./coast.ts";
-
-function hash(x: number, z: number) {
-  const n = Math.sin(x * 127.1 + z * 311.7) * 43758.5453123;
-  return (n - Math.floor(n)) * 2 - 1;
-}
-
-function noise(x: number, z: number) {
-  const ix = Math.floor(x), iz = Math.floor(z);
-  const fx = x - ix, fz = z - iz;
-  const sx = fx * fx * (3 - 2 * fx), sz = fz * fz * (3 - 2 * fz);
-  const a = hash(ix, iz) * (1 - sx) + hash(ix + 1, iz) * sx;
-  const b = hash(ix, iz + 1) * (1 - sx) + hash(ix + 1, iz + 1) * sx;
-  return a * (1 - sz) + b * sz;
-}
+import { noise, smoothstep } from "./noise.ts";
+import { homeWeight, outerInland } from "./world.ts";
 
 // Mission terrain is shared by Beacon Ridge, Sky Circuit, Ridge Defense and Jade Citadel.
 // Keep authored structures/checkpoint approaches clear at their existing elevations.
@@ -25,11 +13,6 @@ const missionClearings = [
 ];
 // Spawn, three beacons, and the player's hoard nest (see HOARD_SITE in loot.ts).
 const openClearings = [[0, 0], [-30, -100], [130, 90], [-130, 90], [0, -13]];
-
-function smoothstep(a: number, b: number, value: number) {
-  const t = Math.max(0, Math.min(1, (value - a) / (b - a)));
-  return t * t * (3 - 2 * t);
-}
 
 /** One continuous height source for rendering, collision, and object placement. */
 export function terrainHeight(x: number, z: number, kind: LandscapeKind) {
@@ -43,10 +26,17 @@ export function terrainHeight(x: number, z: number, kind: LandscapeKind) {
   const middle = noise(x * 0.041, z * 0.041) * 2.3;
   const detail = noise(x * 0.12, z * 0.12) * 0.42;
   if (kind === "open") {
-    const lakeDistance = Math.hypot((x - 62) / 42, (z + 82) / 28);
-    const lakeBasin = (1 - smoothstep(0.65, 1.2, lakeDistance)) * -5.2;
-    const escarpment = Math.pow(Math.max(0, noise(x * 0.009 - 4, z * 0.009 + 8)), 3) * 13;
-    return coastalHeight(x, z, broad + middle + detail + lakeBasin + escarpment) * clearing;
+    // The home valley keeps its original shape; the kingdoms beyond blend in around it.
+    const home = homeWeight(x, z);
+    let inland = 0;
+    if (home > 0) {
+      const lakeDistance = Math.hypot((x - 62) / 42, (z + 82) / 28);
+      const lakeBasin = (1 - smoothstep(0.65, 1.2, lakeDistance)) * -5.2;
+      const escarpment = Math.pow(Math.max(0, noise(x * 0.009 - 4, z * 0.009 + 8)), 3) * 13;
+      inland = broad + middle + detail + lakeBasin + escarpment;
+    }
+    if (home < 1) inland = inland * home + outerInland(x, z) * (1 - home);
+    return coastalHeight(x, z, inland) * clearing;
   }
   // Raise the valley walls; keep the objective clearings at their authored y=0.
   const rim = smoothstep(35, 112, Math.hypot(x * 0.92, z + 22));

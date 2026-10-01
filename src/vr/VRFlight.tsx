@@ -11,6 +11,9 @@ import type { MissionRuntimeState, MissionDefinition } from "../game/missions";
 import { clawReach, rotateY, talonAnchor } from "../game/claws";
 import type { ClawSide } from "../game/claws";
 import { lootHud } from "../game/lootRuntime";
+import { rivalHud, vitalityHud } from "../game/rivalRuntime";
+import { scavengerHud } from "../game/scavengerRuntime";
+import { kingdomAt } from "../game/world";
 import DragonClaw from "../world/DragonClaw";
 import { VRScavengerRig } from "./VRScavenger";
 import type { RaidState } from "../scavenger/raidState";
@@ -84,6 +87,8 @@ export function VRFlightRig({ mission, missionState, claws }: VRSceneProps) {
   const scratch = useMemo(() => ({ forward: new THREE.Vector3(), quaternion: new THREE.Quaternion() }), []);
   const helpMesh = useRef<THREE.Mesh>(null);
   const statusMesh = useRef<THREE.Mesh>(null);
+  // The DOM toasts and HUD are invisible in a headset, so the latest news shows on the status panel.
+  const news = useRef<{ text: string; tone: string; at: number } | null>(null);
   const hands = useRef({
     left: { position: new THREE.Vector3(), orientation: new THREE.Quaternion(), reach: { x: 0, y: 0, z: 0 }, velocity: { x: 0, y: 0, z: 0 }, near: false },
     right: { position: new THREE.Vector3(), orientation: new THREE.Quaternion(), reach: { x: 0, y: 0, z: 0 }, velocity: { x: 0, y: 0, z: 0 }, near: false },
@@ -98,7 +103,7 @@ export function VRFlightRig({ mission, missionState, claws }: VRSceneProps) {
       texture.colorSpace = THREE.SRGBColorSpace;
       return { canvas, texture, context: canvas.getContext("2d")! };
     };
-    return { help: make(1024, 320), status: make(1024, 256) };
+    return { help: make(1024, 320), status: make(1024, 320) };
   }, []);
   useEffect(() => () => { panels.help.texture.dispose(); panels.status.texture.dispose(); }, [panels]);
   useEffect(() => {
@@ -114,15 +119,25 @@ export function VRFlightRig({ mission, missionState, claws }: VRSceneProps) {
     // Feel the treasure: a firm pulse on a grab, a cascade when it reaches the hoard.
     const snatched = (event: Event) => pulse(session, (event as CustomEvent<{ side: ClawSide | "both" }>).detail.side ?? "both", 0.75, 70);
     const banked = () => pulse(session, "both", 0.45, 110);
+    // A hit shakes both hands.
+    const hurt = () => pulse(session, "both", 0.9, 90);
+    const toast = (event: Event) => {
+      const { text, tone } = (event as CustomEvent<{ text: string; tone: string }>).detail;
+      news.current = { text, tone, at: performance.now() / 1000 };
+    };
     session.addEventListener("visibilitychange", visibility);
     missionEmitter.addEventListener("loot_snatched", snatched);
     missionEmitter.addEventListener("loot_banked", banked);
+    missionEmitter.addEventListener("player_hit", hurt);
+    missionEmitter.addEventListener("loot_toast", toast);
     return () => {
       resetInput();
       clawInput.active = clawInput.left.tracked = clawInput.right.tracked = false;
       session.removeEventListener("visibilitychange", visibility);
       missionEmitter.removeEventListener("loot_snatched", snatched);
       missionEmitter.removeEventListener("loot_banked", banked);
+      missionEmitter.removeEventListener("player_hit", hurt);
+      missionEmitter.removeEventListener("loot_toast", toast);
     };
   }, [session]);
 
@@ -231,20 +246,40 @@ export function VRFlightRig({ mission, missionState, claws }: VRSceneProps) {
     displayElapsed.current = state.clock.elapsedTime;
 
     const status = panels.status.context;
-    status.clearRect(0, 0, 1024, 256);
+    status.clearRect(0, 0, 1024, 320);
     status.fillStyle = "rgba(9, 20, 29, .8)";
-    status.beginPath(); status.roundRect(0, 0, 1024, 256, 36); status.fill();
+    status.beginPath(); status.roundRect(0, 0, 1024, 320, 36); status.fill();
     status.textAlign = "left";
     status.fillStyle = "#f0deaa";
-    status.font = "bold 46px sans-serif";
-    status.fillText(`${mission?.name ?? "FREE FLIGHT"} · ${playerStatus.flightMode.toUpperCase()} · ${playerStatus.speed.toFixed(0)}`, 40, 68, 944);
+    status.font = "bold 44px sans-serif";
+    const place = mission?.name ?? kingdomAt(playerPos.x, playerPos.z).name.toUpperCase();
+    status.fillText(`${place} · ${playerStatus.flightMode.toUpperCase()} · ${playerStatus.speed.toFixed(0)}`, 40, 64, 944);
     const objective = mission?.objectives[missionState?.activeObjectiveIndex ?? 0];
-    status.fillStyle = "#ffffff";
-    status.font = "38px sans-serif";
     const talons = lootHud.both && lootHud.left ? `Both talons: ${lootHud.left.name}` : `L: ${lootHud.left?.name ?? "empty"} · R: ${lootHud.right?.name ?? "empty"}`;
-    status.fillText(objective ? `${objective.label} · ${missionState?.progress[objective.id] ?? 0}/${objective.requiredCount ?? 1}` : claws ? `${talons}${lootHud.left || lootHud.right ? ` · hoard ${Math.round(lootHud.hoardDistance)}m` : ""}` : "Explore and discover beacons", 40, 138, 944);
+    // The most urgent news first: what just happened, a raid on your hoard, a rival on your tail, a thief nearby.
+    const latest = news.current && now - news.current.at < 4.5 ? news.current : null;
+    const raid = scavengerHud.raid, threat = rivalHud.nearest, hauler = scavengerHud.hauler;
+    const [alert, color] = objective ? [`${objective.label} · ${missionState?.progress[objective.id] ?? 0}/${objective.requiredCount ?? 1}`, "#ffffff"]
+      : latest ? [latest.text, latest.tone === "warn" ? "#ffb0a0" : latest.tone === "legend" ? "#f5b8ff" : latest.tone === "gold" ? "#ffd98a" : "#ffffff"]
+      : raid ? [`RAID! ${raid.camp} raiders ${raid.stage} at your hoard · ${Math.round(raid.distance)} m`, "#ff8a7a"]
+      : threat ? [`${threat.name} the ${threat.tribe} ${threat.mode === "warn" ? "warns you off" : "is after you"} · ${Math.round(threat.distance)} m`, "#ffc28a"]
+      : hauler ? [`A scavenger is hauling off the ${hauler.item} · ${Math.round(hauler.distance)} m`, "#ffd9a0"]
+      : claws ? [`${talons}${lootHud.left || lootHud.right ? ` · hoard ${Math.round(lootHud.hoardDistance)}m` : ""}`, "#ffffff"]
+      : ["Explore and discover beacons", "#ffffff"];
+    status.fillStyle = color;
+    status.font = "34px sans-serif";
+    // Wrap onto two lines rather than squeezing a long message.
+    const words = alert.split(" "), lines: string[] = [""];
+    for (const word of words) {
+      const line = lines[lines.length - 1];
+      if (line && status.measureText(`${line} ${word}`).width > 944) { if (lines.length === 2) { lines[1] += "…"; break; } lines.push(word); }
+      else lines[lines.length - 1] = line ? `${line} ${word}` : word;
+    }
+    lines.forEach((line, i) => status.fillText(line, 40, 128 + i * 44, 944));
     status.fillStyle = "#8ee7c9";
-    status.fillText(`${missionState ? `HP ${Math.ceil(missionState.playerHp)} · ` : ""}${abilityState.label}: ${abilityState.cooldownLeft > 0 ? `${abilityState.cooldownLeft.toFixed(1)}s` : "READY"}${mission?.timeLimitSeconds ? ` · ${Math.ceil(Math.max(0, mission.timeLimitSeconds - (missionState?.elapsedTime ?? 0)))}s left` : ""}`, 40, 204, 944);
+    status.font = "36px sans-serif";
+    const hp = missionState ? `HP ${Math.ceil(missionState.playerHp)} · ` : claws ? `HP ${Math.ceil(vitalityHud.hp)}/${vitalityHud.max} · ` : "";
+    status.fillText(`${hp}${abilityState.label}: ${abilityState.cooldownLeft > 0 ? `${abilityState.cooldownLeft.toFixed(1)}s` : "READY"}${mission?.timeLimitSeconds ? ` · ${Math.ceil(Math.max(0, mission.timeLimitSeconds - (missionState?.elapsedTime ?? 0)))}s left` : ""}`, 40, 268, 944);
     panels.status.texture.needsUpdate = true;
 
     if (!helpVisible) return;
@@ -274,7 +309,7 @@ export function VRFlightRig({ mission, missionState, claws }: VRSceneProps) {
       <meshBasicMaterial map={panels.help.texture} transparent depthTest={false} toneMapped={false} />
     </mesh>
     <mesh ref={statusMesh} renderOrder={19}>
-      <planeGeometry args={[0.72, 0.18]} />
+      <planeGeometry args={[0.72, 0.225]} />
       <meshBasicMaterial map={panels.status.texture} transparent toneMapped={false} />
     </mesh>
     {claws && (["left", "right"] as const).map(side => <group key={side} ref={handGroups[side]} visible={false}>

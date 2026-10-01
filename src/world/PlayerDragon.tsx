@@ -8,7 +8,7 @@ import { SkeletonUtils } from "three-stdlib";
 import * as THREE from "three";
 import type { DragonType } from "../dragons";
 import { colorDragonModel, animateDragonEffects } from "../dragons";
-import { keys, joy, pan, abilityState, playerPos, playerStatus, gameSession, xrInput, resetInput, shoot, missionEmitter, aim, combatFeedback, talonState, playerVelocity, carryState, clawInput } from "../game/runtime";
+import { keys, joy, pan, abilityState, playerPos, playerStatus, gameSession, xrInput, resetInput, shoot, missionEmitter, aim, combatFeedback, talonState, playerVelocity, carryState, clawInput, windState } from "../game/runtime";
 import { clampInput, damp, damping, flightVelocity } from "../game/flight";
 import { createAbilityState, activateAbility, stepAbility } from "../game/abilities";
 import { settings } from "../controls/ControlSettings";
@@ -89,10 +89,35 @@ export default function PlayerDragon({ dragon }: { dragon: DragonType }) {
     controllerRef.current = controller;
     return () => { controllerRef.current = null; world.removeCharacterController(controller); };
   }, [world]);
+  // Respawns (and test tooling) move the dragon instantly, dropping any momentum.
+  const snapCamera = useRef(false);
+  useEffect(() => {
+    const teleport = (event: Event) => {
+      const target = (event as CustomEvent<{ x: number; y: number; z: number; heading?: number }>).detail;
+      const body = rbRef.current;
+      if (!body || ![target.x, target.y, target.z].every(Number.isFinite)) return;
+      body.setTranslation(target, true);
+      body.setNextKinematicTranslation(target);
+      Object.assign(playerPos, { x: target.x, y: target.y, z: target.z });
+      Object.assign(desiredVelocity.current, { x: 0, y: 0, z: 0 });
+      Object.assign(actualVelocity.current, { x: 0, y: 0, z: 0 });
+      if (Number.isFinite(target.heading) && visualGroupRef.current) visualGroupRef.current.rotation.y = target.heading!;
+      snapCamera.current = true;
+    };
+    missionEmitter.addEventListener("player_teleport", teleport);
+    return () => missionEmitter.removeEventListener("player_teleport", teleport);
+  }, []);
+  const windMove = useMemo(() => ({ x: 0, y: 0, z: 0 }), []);
   useBeforePhysicsStep(() => {
     if (gameSession.paused || !rbRef.current || !colliderRef.current || !controllerRef.current) return;
-    const result = moveFlightCharacter(controllerRef.current, rbRef.current, colliderRef.current, desiredVelocity.current, world.timestep, rapier.QueryFilterFlags.EXCLUDE_SENSORS);
-    Object.assign(actualVelocity.current, result.velocity);
+    // The wind carries the dragon, but its own flight model only remembers its own speed,
+    // so a steady current never compounds through the flight damping.
+    const desired = desiredVelocity.current;
+    windMove.x = desired.x + windState.x; windMove.y = desired.y + windState.y; windMove.z = desired.z + windState.z;
+    const result = moveFlightCharacter(controllerRef.current, rbRef.current, colliderRef.current, windMove, world.timestep, rapier.QueryFilterFlags.EXCLUDE_SENSORS);
+    actualVelocity.current.x = result.velocity.x - windState.x;
+    actualVelocity.current.y = result.velocity.y - windState.y;
+    actualVelocity.current.z = result.velocity.z - windState.z;
   });
   const { scene: sourceScene, animations: rawAnimations } = useGLTF(DRAGON_MODEL);
   // The loader cache is shared with every selection preview. Own this skeleton/material set.
@@ -252,9 +277,12 @@ export default function PlayerDragon({ dragon }: { dragon: DragonType }) {
     const velocity = flightVelocity(actualVelocity.current, { forward: dz, climb: dy }, playerStatus.heading, maxSpeed, settings.climbSensitivity * carryState.climbFactor, altitudeAboveGround, delta, override, { glide: Boolean(gliding), brake: Boolean(braking), agility: s.agility, grounded, speedCeiling: inVR ? 12 : undefined });
     const tvx = velocity.x, fvy = velocity.y, tvz = velocity.z;
     Object.assign(desiredVelocity.current, velocity);
-    Object.assign(playerVelocity, actualVelocity.current);
-    playerStatus.flightMode = gliding ? "glide" : braking ? "braking" : flightMode(grounded, altitudeAboveGround, actualVelocity.current);
-    playerStatus.speed = Math.hypot(actualVelocity.current.x, actualVelocity.current.y, actualVelocity.current.z);
+    // What the world sees (thrown treasure, the speed readout) includes the wind's carry.
+    playerVelocity.x = actualVelocity.current.x + windState.x;
+    playerVelocity.y = actualVelocity.current.y + windState.y;
+    playerVelocity.z = actualVelocity.current.z + windState.z;
+    playerStatus.flightMode = windState.windway >= 0 && !grounded ? "windride" : gliding ? "glide" : braking ? "braking" : flightMode(grounded, altitudeAboveGround, actualVelocity.current);
+    playerStatus.speed = Math.hypot(playerVelocity.x, playerVelocity.y, playerVelocity.z);
 
     // Aim feedback and emitted shots share the same muzzle and central direction.
     _muzzleOffset.set(0, 1.2, -3);
@@ -447,7 +475,10 @@ export default function PlayerDragon({ dragon }: { dragon: DragonType }) {
       _camQuat.setFromEuler(_camEuler);
       _camOffset.set(0, 3, 7).applyQuaternion(_camQuat).add(_camVec);
       const lerpSpeed = pan.active ? 15 : 5;
-      cameraRef.current.position.lerp(_camOffset, damping(lerpSpeed, delta));
+      // After a teleport the camera jumps with the dragon instead of sweeping across the map.
+      if (snapCamera.current) cameraRef.current.position.copy(_camOffset);
+      else cameraRef.current.position.lerp(_camOffset, damping(lerpSpeed, delta));
+      snapCamera.current = false;
       _lookAt.set(_camVec.x, _camVec.y + 1.5, _camVec.z);
       cameraRef.current.lookAt(_lookAt);
     }

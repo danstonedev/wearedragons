@@ -8,9 +8,9 @@ import { gameSession } from "../game/runtime";
 export default function Ocean() {
   const geometry = useMemo(() => {
     const positions: number[] = [], indices: number[] = [];
-    const columns = 96, rows = 24;
+    const columns = 160, rows = 24;
     for (let row = 0; row <= rows; row++) for (let column = 0; column <= columns; column++) {
-      const x = column / columns * 1400 - 700;
+      const x = column / columns * 2400 - 1200;
       const start = shorelineZ(x) - 3;
       positions.push(x, SEA_LEVEL, start + row / rows * (900 - start));
     }

@@ -150,7 +150,8 @@ export default function WorldDetails({ kind }: { kind: LandscapeKind }) {
   ] : [pathGeometry([[-5, 4], [-15, -28], [-28, -62], [-30, -100]], kind, 1.5)], [kind]);
   useEffect(() => () => paths.forEach(path => path.dispose()), [paths]);
   return <>
-    <MountainBackdrop kind={kind} />
+    {/* The open world is walled by real peaks at its edges; only the mission valley needs a backdrop. */}
+    {kind === "ridge" && <MountainBackdrop kind={kind} />}
     <Meadow kind={kind} />
     {kind === "open" && <RegionalLandmarks />}
     {paths.map((geometry, index) => <mesh key={index} geometry={geometry} receiveShadow>

@@ -370,3 +370,224 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ---- Kingdoms ---- */
+
+.ow-attitude {
+  font-family: "Space Grotesk", "Inter", sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  margin-top: 2px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.35);
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.8);
+}
+.ow-attitude.home { color: #8ff0b0; }
+.ow-attitude.rival { color: #ffb38a; }
+.ow-attitude.neutral { color: rgba(255, 255, 255, 0.7); }
+
+.ow-entry-banner-attitude {
+  font-family: "Space Grotesk", "Inter", sans-serif;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  margin-top: 10px;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.9);
+}
+.ow-entry-banner-attitude.home { color: #8ff0b0; }
+.ow-entry-banner-attitude.rival { color: #ffb38a; }
+.ow-entry-banner-attitude.neutral { color: rgba(255, 255, 255, 0.75); }
+
+.ow-map-panel-wide {
+  width: min(760px, 92vw);
+  max-height: 94vh;
+  overflow-y: auto;
+}
+.ow-map-world {
+  aspect-ratio: auto;
+  background: #0d2735;
+}
+.ow-map-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  image-rendering: auto;
+}
+.ow-map-painting {
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  transform: translateX(-50%);
+  font-family: "Space Grotesk", "Inter", sans-serif;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  color: rgba(255, 255, 255, 0.8);
+  background: rgba(0, 0, 0, 0.5);
+  padding: 3px 10px;
+  border-radius: 999px;
+}
+.ow-map-world .ow-map-region-label {
+  transform: translate(-50%, -50%);
+  white-space: nowrap;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.95), 0 0 10px rgba(0, 0, 0, 0.6);
+}
+.ow-map-world .ow-map-beacon-dot,
+.ow-map-world .ow-map-hoard-dot {
+  text-shadow: 0 0 6px rgba(0, 0, 0, 0.9);
+}
+.ow-map-camp {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  font-size: 12px;
+  line-height: 1;
+  filter: drop-shadow(0 0 3px rgba(0, 0, 0, 0.9)) sepia(0.6);
+  pointer-events: none;
+}
+.ow-map-scavenger {
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  border: 1px solid rgba(0, 0, 0, 0.7);
+  pointer-events: none;
+  z-index: 2;
+}
+.ow-map-scavenger.raider { background: #ff4a3a; box-shadow: 0 0 8px #ff4a3a; animation: ow-alarm-pulse 0.6s ease-in-out infinite alternate; }
+.ow-map-scavenger.hauler { background: #ffb02e; box-shadow: 0 0 6px #ffb02e; }
+.ow-map-player-arrow {
+  position: absolute;
+  color: #ffffff;
+  font-size: 13px;
+  line-height: 1;
+  filter: drop-shadow(0 0 4px rgba(0, 0, 0, 0.9)) drop-shadow(0 0 8px rgba(255, 255, 255, 0.6));
+  pointer-events: none;
+  z-index: 3;
+}
+.ow-map-windways {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.ow-map-windways path {
+  fill: none;
+  stroke: rgba(210, 245, 255, 0.75);
+  stroke-width: 0.35;
+  stroke-dasharray: 1.4 1;
+}
+
+/* ---- Rival combat ---- */
+
+.ow-vitals {
+  position: absolute;
+  top: 128px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  pointer-events: none;
+  z-index: 11;
+  font-family: "Space Grotesk", "Inter", sans-serif;
+}
+.ow-alarm {
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  color: #ffd27a;
+  background: rgba(70, 20, 10, 0.75);
+  border: 1px solid rgba(255, 140, 60, 0.6);
+  padding: 4px 12px;
+  border-radius: 999px;
+  animation: ow-alarm-pulse 1s ease-in-out infinite alternate;
+}
+@keyframes ow-alarm-pulse { from { box-shadow: 0 0 0 rgba(255, 120, 40, 0); } to { box-shadow: 0 0 16px rgba(255, 120, 40, 0.7); } }
+.ow-threat {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  padding: 4px 12px;
+  border-radius: 8px;
+  background: rgba(20, 10, 12, 0.72);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+  white-space: nowrap;
+  max-width: 92vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ow-threat.warn { color: #ffd27a; border: 1px solid rgba(255, 210, 122, 0.45); }
+.ow-threat.chase { color: #ffb0a0; border: 1px solid rgba(255, 100, 80, 0.6); }
+.ow-threat .loot-arrow { display: inline-block; margin-right: 6px; }
+/* Scavengers: a raid on your hoard, or a thief making off with treasure nearby. */
+.ow-raid, .ow-hauler {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  padding: 4px 12px;
+  border-radius: 8px;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+  white-space: nowrap;
+  max-width: 92vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ow-raid { color: #ffc2b8; background: rgba(60, 12, 8, 0.8); border: 1px solid rgba(255, 90, 60, 0.7); }
+.ow-raid.looting { color: #fff; background: rgba(140, 20, 10, 0.85); animation: ow-alarm-pulse 0.5s ease-in-out infinite alternate; }
+.ow-hauler { color: #ffd9a0; background: rgba(40, 24, 8, 0.75); border: 1px solid rgba(255, 176, 46, 0.55); }
+.ow-raid .loot-arrow, .ow-hauler .loot-arrow { display: inline-block; margin-right: 6px; }
+.ow-health {
+  position: relative;
+  width: 210px;
+  height: 14px;
+  border-radius: 7px;
+  background: rgba(20, 16, 22, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  overflow: hidden;
+}
+.ow-health i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  transition: width 0.2s ease;
+}
+.ow-health span {
+  position: absolute;
+  inset: 0;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 14px;
+  text-align: center;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+}
+.ow-hurt {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9;
+  box-shadow: inset 0 0 120px rgba(255, 40, 20, 0.55);
+  animation: ow-hurt-fade 0.5s ease-out forwards;
+}
+@keyframes ow-hurt-fade { from { opacity: 1; } to { opacity: 0; } }
+.ow-knockout {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(8, 4, 6, 0.82);
+  animation: ow-knockout-in 0.6s ease forwards;
+  font-family: "Space Grotesk", "Inter", sans-serif;
+  color: #ffd2c4;
+  pointer-events: none;
+}
+.ow-knockout h2 { font-size: 34px; letter-spacing: 0.08em; margin: 0; }
+.ow-knockout p { color: rgba(255, 255, 255, 0.7); }
+@keyframes ow-knockout-in { from { opacity: 0; } to { opacity: 1; } }

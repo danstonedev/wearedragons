@@ -70,8 +70,12 @@ export default function Projectiles() {
 interface EnemyShot {
   position: [number, number, number];
   velocity: [number, number, number];
+  /** Breath color and hit strength; missions use the defaults. */
+  color?: string;
+  damage?: number;
+  size?: number;
 }
-interface EnemyActor { position: THREE.Vector3; velocity: THREE.Vector3; age: number }
+interface EnemyActor { position: THREE.Vector3; velocity: THREE.Vector3; age: number; color: THREE.Color; damage: number; size: number }
 const MAX_ENEMY_SHOTS = 64;
 
 /** One instanced mesh and one simulation loop, with swept hits against a moving player. */
@@ -91,7 +95,10 @@ export function EnemyProjectiles() {
       const shot = (event as CustomEvent<EnemyShot>).detail;
       if (!shot.velocity.every(Number.isFinite)) return;
       if (actors.current.length >= MAX_ENEMY_SHOTS) actors.current.shift();
-      actors.current.push({ position: new THREE.Vector3(...shot.position), velocity: new THREE.Vector3(...shot.velocity), age: 0 });
+      actors.current.push({
+        position: new THREE.Vector3(...shot.position), velocity: new THREE.Vector3(...shot.velocity), age: 0,
+        color: new THREE.Color(shot.color ?? "#ff6138"), damage: Number.isFinite(shot.damage) ? shot.damage! : 12, size: shot.size ?? 1,
+      });
     };
     missionEmitter.addEventListener("enemy_shoot", handle);
     return () => missionEmitter.removeEventListener("enemy_shoot", handle);
@@ -113,26 +120,29 @@ export function EnemyProjectiles() {
       ray.current.dir = work.relativeTo.copy(work.to).sub(work.from).normalize();
       const hitWorld = world.castRay(ray.current, length, true, undefined, interactionGroups(0, [0]));
       if (hitPlayer !== null && (!hitWorld || hitPlayer * length < hitWorld.timeOfImpact)) {
-        missionEmitter.dispatchEvent(new CustomEvent("player_hit", { detail: { damage: 12 } }));
+        missionEmitter.dispatchEvent(new CustomEvent("player_hit", { detail: { damage: actor.damage, color: actor.color.getStyle() } }));
         continue;
       }
       if (actor.age >= 4 || hitWorld) continue;
       actor.position.copy(work.to);
       work.dummy.position.copy(actor.position);
       work.dummy.rotation.set(actor.age * 3, 0, actor.age * 2);
+      work.dummy.scale.setScalar(actor.size);
       work.dummy.updateMatrix();
       mesh.current.setMatrixAt(remaining.length, work.dummy.matrix);
+      mesh.current.setColorAt(remaining.length, actor.color);
       remaining.push(actor);
     }
     actors.current = remaining;
     previousPlayer.current.copy(playerPos);
     mesh.current.count = remaining.length;
     mesh.current.instanceMatrix.needsUpdate = true;
+    if (mesh.current.instanceColor) mesh.current.instanceColor.needsUpdate = true;
   });
   return (
     <instancedMesh ref={mesh} args={[undefined, undefined, MAX_ENEMY_SHOTS]} frustumCulled={false} count={0}>
       <octahedronGeometry args={[0.4, 0]} />
-      <meshBasicMaterial color="#ff6138" toneMapped={false} />
+      <meshBasicMaterial color="#ffffff" toneMapped={false} />
     </instancedMesh>
   );
 }

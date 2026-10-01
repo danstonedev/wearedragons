@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
 import type { DragonType } from "./dragons";
+import { ALL_TREASURES } from "./game/loot";
 
 export default function ModeSelect({
   dragon,
@@ -53,11 +54,11 @@ export default function ModeSelect({
             <div className="mode-card-icon">◈</div>
             <div className="mode-card-label">OPEN WORLD</div>
             <div className="mode-card-desc">
-              Fly freely across Pyrrhia, Pantala, and Glaeryus. Swoop low to
-              snatch treasure in your talons, from treetops, rock spires, and
-              drifting sky lanterns, and carry it home to grow your hoard.
+              Fly a continent of dragon kingdoms. Swoop low to snatch treasure,
+              ride the windways, dodge rival tribes, chase off scavengers, and
+              carry it all home to grow your hoard.
             </div>
-            <div className="mode-card-tag">24 TREASURES · YOUR HOARD</div>
+            <div className="mode-card-tag">{ALL_TREASURES.length} TREASURES · 9 KINGDOMS · YOUR HOARD</div>
           </button>
 
           <button
