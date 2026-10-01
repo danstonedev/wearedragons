@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
-import { createScatter, terrainHeight } from "../game/landscape";
+import { createScatter, regionalFormations, terrainHeight } from "../game/landscape";
 import type { LandscapeKind } from "../game/landscape";
 import { finalizeInstances, renderingBudget } from "../game/rendering";
 import { device } from "../utils/device";
@@ -90,14 +90,7 @@ function Meadow({ kind }: { kind: LandscapeKind }) {
 }
 
 function RegionalLandmarks() {
-  const formations = useMemo(() => Array.from({ length: 38 }, (_, i) => {
-    const eastern = i % 2 === 0;
-    const lane = Math.floor(i / 2);
-    const x = (eastern ? 1 : -1) * (35 + (lane * 37 % 145));
-    const z = 44 + (lane * 53 % 145);
-    const height = 5 + (lane * 19 % 14);
-    return { eastern, x, z, height, rotation: (lane * 2.17) % Math.PI };
-  }), []);
+  const formations = useMemo(() => regionalFormations(), []);
   const rocks = useRef<THREE.InstancedMesh>(null);
   const geometry = useMemo(() => new THREE.IcosahedronGeometry(1, 2), []);
   useEffect(() => {

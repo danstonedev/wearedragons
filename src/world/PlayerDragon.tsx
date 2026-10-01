@@ -1,6 +1,6 @@
 import { useRef, useEffect, useMemo } from "react";
 import { useFrame } from "@react-three/fiber";
-import { PerspectiveCamera, useGLTF, useAnimations } from "@react-three/drei";
+import { PerspectiveCamera, useGLTF } from "@react-three/drei";
 import { CapsuleCollider, RigidBody, useRapier, useBeforePhysicsStep } from "@react-three/rapier";
 import type { RapierRigidBody, RapierCollider } from "@react-three/rapier";
 import type { KinematicCharacterController } from "@dimforge/rapier3d-compat";
@@ -8,13 +8,14 @@ import { SkeletonUtils } from "three-stdlib";
 import * as THREE from "three";
 import type { DragonType } from "../dragons";
 import { colorDragonModel, animateDragonEffects } from "../dragons";
-import { keys, joy, pan, abilityState, playerPos, playerStatus, gameSession, xrInput, resetInput, shoot, missionEmitter, aim, combatFeedback } from "../game/runtime";
+import { keys, joy, pan, abilityState, playerPos, playerStatus, gameSession, xrInput, resetInput, shoot, missionEmitter, aim, combatFeedback, talonState, playerVelocity, carryState, clawInput } from "../game/runtime";
 import { clampInput, damp, damping, flightVelocity } from "../game/flight";
 import { createAbilityState, activateAbility, stepAbility } from "../game/abilities";
 import { settings } from "../controls/ControlSettings";
 import { configureFlightController, moveFlightCharacter, PLAYER_GROUPS, PLAYER_CAPSULE, flightMode } from "../game/characterMovement";
 import { safeMuzzle, WORLD_ONLY } from "../game/aim";
 import DragonAdornments from "./DragonAdornments";
+import { useDragonAnimations } from "./useDragonAnimations";
 
 const DRAGON_MODEL = `${import.meta.env.BASE_URL}dragon.glb`;
 
@@ -57,6 +58,9 @@ export default function PlayerDragon({ dragon }: { dragon: DragonType }) {
     return () => {
       resetInput();
       gameSession.ready = false;
+      talonState.ready = false;
+      Object.assign(carryState, { speedFactor: 1, climbFactor: 1 });
+      Object.assign(playerVelocity, { x: 0, y: 0, z: 0 });
       playerStatus.cloaked = false;
       playerStatus.invulnerable = false;
       Object.assign(abilityState, { cooldownLeft: 0, active: false, label: "" });
@@ -118,9 +122,8 @@ export default function PlayerDragon({ dragon }: { dragon: DragonType }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rawAnimations, scene]);
 
-  const { actions, mixer } = useAnimations(animations, scene);
+  const animation = useDragonAnimations(scene, animations);
   useEffect(() => () => {
-    mixer.uncacheRoot(scene);
     const ownedMaterials = new Set<THREE.Material>();
     scene.traverse((child) => {
       if ((child as THREE.Mesh).isMesh) {
@@ -129,12 +132,26 @@ export default function PlayerDragon({ dragon }: { dragon: DragonType }) {
       }
     });
     for (const material of ownedMaterials) material.dispose();
-  }, [scene, mixer]);
+  }, [scene]);
 
   const activeAnimRef = useRef<string>("");
   const targetTimeScaleRef = useRef(1);
   const prevCloakRef = useRef(false);
   const meshListRef = useRef<THREE.Mesh[]>([]);
+  // Hind feet carry treasure; they follow every animation clip, bank, and pitch.
+  const feet = useMemo(() => ({ left: scene.getObjectByName("FeetL") ?? null, right: scene.getObjectByName("FeetR") ?? null }), [scene]);
+  const _footWorld = useMemo(() => new THREE.Vector3(), []);
+  const _bodyWorld = useMemo(() => new THREE.Vector3(), []);
+  // In VR the hind legs swing toward the talon targets your hands set.
+  const legs = useMemo(() => {
+    const leg = (upper: string, foot: string) => {
+      const bone = scene.getObjectByName(upper), tip = scene.getObjectByName(foot);
+      return bone && tip ? { bone, tip, rest: bone.quaternion.clone() } : null;
+    };
+    return { left: leg("UpperLegL", "FeetL"), right: leg("UpperLegR", "FeetR") };
+  }, [scene]);
+  const legsReaching = useRef(false);
+  const _leg = useMemo(() => ({ hip: new THREE.Vector3(), tip: new THREE.Vector3(), aim: new THREE.Vector3(), turn: new THREE.Quaternion(), limited: new THREE.Quaternion(), parent: new THREE.Quaternion(), identity: new THREE.Quaternion() }), []);
 
   // Reusable objects to avoid per-frame allocations
   const _camVec = useMemo(() => new THREE.Vector3(), []);
@@ -155,11 +172,8 @@ export default function PlayerDragon({ dragon }: { dragon: DragonType }) {
   const _muzzleRay = useMemo(() => new rapier.Ray({ x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: -1 }), [rapier]);
 
   useEffect(() => {
-    const flyAction = actions["Dragon_Flying"] ?? Object.values(actions)[0];
-    if (flyAction) {
-      flyAction.reset().fadeIn(0.5).play();
-      activeAnimRef.current = "Dragon_Flying";
-    }
+    // The animation rig starts flying whenever the skeleton changes.
+    activeAnimRef.current = "Dragon_Flying";
 
     if (scene) {
 
@@ -170,7 +184,7 @@ export default function PlayerDragon({ dragon }: { dragon: DragonType }) {
       });
       meshListRef.current = meshes;
     }
-  }, [actions, scene, c]);
+  }, [scene, animations]);
 
   useFrame((state, frameDelta) => {
     if (!rbRef.current || !visualGroupRef.current) return;
@@ -223,7 +237,7 @@ export default function PlayerDragon({ dragon }: { dragon: DragonType }) {
     Object.assign(abilityState, { cooldownLeft: ability.cooldown, label: spec.label, active: ability.remaining > 0 });
 
     const baseMaxSpeed = 20 * s.speed;
-    const requestedSpeed = (boostRef.current > 0 ? baseMaxSpeed * 2 : baseMaxSpeed) * settings.speedSensitivity;
+    const requestedSpeed = (boostRef.current > 0 ? baseMaxSpeed * 2 : baseMaxSpeed) * settings.speedSensitivity * carryState.speedFactor;
     const airborneSpeed = inVR ? Math.min(12, requestedSpeed) : requestedSpeed;
     const maxSpeed = grounded && dy <= 0 && ability.type !== "updraft" ? Math.min(6 * s.speed, airborneSpeed) : airborneSpeed;
     if (boostRef.current > 0) dz = Math.min(dz, -0.75);
@@ -235,9 +249,10 @@ export default function PlayerDragon({ dragon }: { dragon: DragonType }) {
     const targetBank = rollRef.current > 0 ? (rollRef.current / Math.max(spec.duration, 0.1)) * Math.PI * 4 : -dx * Math.PI / 6 * bankStrength;
     visualGroupRef.current.rotation.z = rollRef.current > 0 ? targetBank : damp(visualGroupRef.current.rotation.z, targetBank, 10, delta);
     const override = ability.type === "ground_slam" ? -60 : ability.type === "updraft" ? 40 * Math.min(1, ability.remaining / 0.25) : undefined;
-    const velocity = flightVelocity(actualVelocity.current, { forward: dz, climb: dy }, playerStatus.heading, maxSpeed, settings.climbSensitivity, altitudeAboveGround, delta, override, { glide: Boolean(gliding), brake: Boolean(braking), agility: s.agility, grounded, speedCeiling: inVR ? 12 : undefined });
+    const velocity = flightVelocity(actualVelocity.current, { forward: dz, climb: dy }, playerStatus.heading, maxSpeed, settings.climbSensitivity * carryState.climbFactor, altitudeAboveGround, delta, override, { glide: Boolean(gliding), brake: Boolean(braking), agility: s.agility, grounded, speedCeiling: inVR ? 12 : undefined });
     const tvx = velocity.x, fvy = velocity.y, tvz = velocity.z;
     Object.assign(desiredVelocity.current, velocity);
+    Object.assign(playerVelocity, actualVelocity.current);
     playerStatus.flightMode = gliding ? "glide" : braking ? "braking" : flightMode(grounded, altitudeAboveGround, actualVelocity.current);
     playerStatus.speed = Math.hypot(actualVelocity.current.x, actualVelocity.current.y, actualVelocity.current.z);
 
@@ -299,6 +314,7 @@ export default function PlayerDragon({ dragon }: { dragon: DragonType }) {
       wantAnim = "Dragon_Attack";
     }
 
+    const actions = animation.current.actions;
     if (wantAnim !== activeAnimRef.current) {
       const prev = actions[activeAnimRef.current];
       const next = actions[wantAnim];
@@ -352,6 +368,40 @@ export default function PlayerDragon({ dragon }: { dragon: DragonType }) {
         pitchTarget,
         damping(4, delta),
       );
+    }
+
+    // Publish claw positions for treasure. The physics group can lag one frame behind the
+    // body, so measure each foot relative to it and re-anchor on this frame's translation.
+    const bodyGroup = visualGroupRef.current.parent;
+    const reaching = inVR && clawInput.active;
+    if (bodyGroup && (reaching || legsReaching.current)) {
+      bodyGroup.getWorldPosition(_bodyWorld);
+      for (const side of ["left", "right"] as const) {
+        const leg = legs[side];
+        if (!leg) continue;
+        leg.bone.quaternion.copy(leg.rest);
+        const hand = clawInput[side];
+        if (!reaching || !hand.tracked) continue;
+        const { hip, tip, aim: target, turn, parent, identity } = _leg;
+        leg.bone.getWorldPosition(hip).sub(_bodyWorld).add(pos as THREE.Vector3Like);
+        leg.tip.getWorldPosition(tip).sub(_bodyWorld).add(pos as THREE.Vector3Like).sub(hip).normalize();
+        target.set(hand.target.x - hip.x, hand.target.y - hip.y, hand.target.z - hip.z);
+        if (target.lengthSq() < 1e-6) continue;
+        turn.setFromUnitVectors(tip, target.normalize());
+        const angle = 2 * Math.acos(Math.min(1, Math.abs(turn.w)));
+        if (angle > 1.3) turn.copy(_leg.limited.copy(identity).slerp(turn, 1.3 / angle));
+        leg.bone.parent!.getWorldQuaternion(parent);
+        leg.bone.quaternion.copy(parent).invert().multiply(turn).multiply(parent).multiply(leg.rest);
+      }
+      legsReaching.current = reaching;
+    }
+    if (feet.left && feet.right && bodyGroup) {
+      bodyGroup.getWorldPosition(_bodyWorld);
+      for (const side of ["left", "right"] as const) {
+        feet[side]!.getWorldPosition(_footWorld).sub(_bodyWorld);
+        Object.assign(talonState[side], { x: pos.x + _footWorld.x, y: pos.y + _footWorld.y, z: pos.z + _footWorld.z });
+      }
+      talonState.ready = true;
     }
 
     // --- Animate dragon material effects ---

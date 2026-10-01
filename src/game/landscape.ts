@@ -22,7 +22,8 @@ const missionClearings = [
   [-25, -25], [25, -25], [-20, -20], [20, -20], [0, -35],
   [-30, -15], [30, -15], [-15, -40], [15, -40],
 ];
-const openClearings = [[0, 0], [-30, -100], [130, 90], [-130, 90]];
+// Spawn, three beacons, and the player's hoard nest (see HOARD_SITE in loot.ts).
+const openClearings = [[0, 0], [-30, -100], [130, 90], [-130, 90], [0, -13]];
 
 function smoothstep(a: number, b: number, value: number) {
   const t = Math.max(0, Math.min(1, (value - a) / (b - a)));
@@ -50,6 +51,25 @@ export function terrainHeight(x: number, z: number, kind: LandscapeKind) {
   const rim = smoothstep(35, 112, Math.hypot(x * 0.92, z + 22));
   const ridge = Math.pow(Math.max(0, noise(x * 0.017 + 11, z * 0.017)), 2) * 18;
   return (broad + middle + detail + rim * (7 + ridge)) * clearing;
+}
+
+export interface RegionalFormation { eastern: boolean; x: number; z: number; height: number; rotation: number }
+
+/** Pantala mesas (east) and Glaeryus spires (west); shared by rendering and treasure perches. */
+export function regionalFormations(): RegionalFormation[] {
+  return Array.from({ length: 38 }, (_, i) => {
+    const eastern = i % 2 === 0;
+    const lane = Math.floor(i / 2);
+    const x = (eastern ? 1 : -1) * (35 + (lane * 37 % 145));
+    const z = 44 + (lane * 53 % 145);
+    const height = 5 + (lane * 19 % 14);
+    return { eastern, x, z, height, rotation: (lane * 2.17) % Math.PI };
+  });
+}
+
+/** Approximate top surface of a rendered formation (its icosahedron is scaled by height * 0.58). */
+export function formationTop(formation: RegionalFormation) {
+  return terrainHeight(formation.x, formation.z, "open") + formation.height * 1.06;
 }
 
 export interface TerrainSurface {

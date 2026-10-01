@@ -61,6 +61,18 @@ import { nextCampaignMission } from "./game/progression";
 import { WORLD_REGIONS, getRegionAtPos } from "./game/worlds";
 import type { WorldRegion } from "./game/worlds";
 import { device, preset, isTouchDevice } from "./utils/device";
+import LootSystem from "./world/LootSystem";
+import { lootMap } from "./game/lootRuntime";
+import { TalonPanel, LootToasts, HoardChip, HoardLedger } from "./components/LootHUD";
+import { useHoard } from "./game/useHoard";
+import { useScavengerProgress } from "./game/useScavengerProgress";
+import { LAIRS } from "./game/scavenger";
+import type { LairDef } from "./game/scavenger";
+import ScavengerSelect from "./scavenger/ScavengerSelect";
+import ScavengerMode from "./scavenger/ScavengerMode";
+import { HOARD_SITE } from "./game/loot";
+import type { HoardProgress, TreasureDef } from "./game/loot";
+import { RARITY_COLORS } from "./world/treasureModels";
 
 
 function Forest() { return <Vegetation kind="ridge" />; }
@@ -678,9 +690,11 @@ function RegionTracker({
 function OpenWorldHUD({
   region,
   discoveredBeacons,
+  hoard,
 }: {
   region: WorldRegion;
   discoveredBeacons: Set<string>;
+  hoard: HoardProgress;
 }) {
   const discoveredCount = discoveredBeacons.size;
   const allFound = discoveredCount === WORLD_REGIONS.length;
@@ -705,6 +719,7 @@ function OpenWorldHUD({
         </span>
         {discoveredCount}/{WORLD_REGIONS.length} BEACONS
       </div>
+      <HoardChip hoard={hoard} />
     </div>
   );
 }
@@ -798,6 +813,13 @@ function WorldMapOverlay({
             );
           })}
 
+          {/* Lit beacons reveal the treasure still glinting in their region */}
+          {lootMap.items.filter(item => discoveredBeacons.has(item.region)).map((item, i) => {
+            const p = toMapPct(item.x, item.z);
+            return <div key={i} className="ow-map-treasure-dot" style={{ left: p.left, top: p.top, color: RARITY_COLORS[item.rarity], background: RARITY_COLORS[item.rarity], width: item.unique ? 7 : 4, height: item.unique ? 7 : 4 }} />;
+          })}
+          <div className="ow-map-hoard-dot" style={toMapPct(HOARD_SITE.x, HOARD_SITE.z)}>◆</div>
+
           {/* Player position dot */}
           <div
             className="ow-map-player-dot"
@@ -815,6 +837,9 @@ function WorldMapOverlay({
           <div className="ow-map-legend-item">
             <span style={{ color: "#fff", fontSize: 8 }}>●</span> Your position
           </div>
+          <div className="ow-map-legend-item">
+            <span style={{ color: "#ffd27a" }}>◆</span> Your hoard · lit beacons reveal treasure
+          </div>
           <div className="ow-map-legend-item right">
             {discoveredBeacons.size} / {WORLD_REGIONS.length} beacons
           </div>
@@ -829,10 +854,16 @@ function OpenWorldView({
   dragon,
   onSwap,
   onBack,
+  hoard,
+  onBank,
+  hoardSaveUnavailable,
 }: {
   dragon: DragonType;
   onSwap: (d: DragonType) => void;
   onBack: () => void;
+  hoard: HoardProgress;
+  onBank: (def: TreasureDef, dragonId: string, value: number) => void;
+  hoardSaveUnavailable: boolean;
 }) {
   const [currentRegion, setCurrentRegion] = useState<WorldRegion>(
     WORLD_REGIONS[0],
@@ -846,7 +877,27 @@ function OpenWorldView({
   const [showSettings, setShowSettings] = useState(false);
   const [controlScheme, setControlScheme] = useState(settings.scheme);
   const [bannerKey, setBannerKey] = useState(0);
-  const { paused, manualPause, togglePause } = useWorldSession(showSettings || showMap);
+  const [showLedger, setShowLedger] = useState(false);
+  const { paused, manualPause, togglePause } = useWorldSession(showSettings || showMap || showLedger);
+
+  // Deliveries are decided in the frame loop and persisted here.
+  useEffect(() => {
+    const banked = (event: Event) => {
+      const { def, value, dragonId } = (event as CustomEvent<{ def: TreasureDef; value: number; dragonId: string }>).detail;
+      onBank(def, dragonId, value);
+    };
+    missionEmitter.addEventListener("loot_banked", banked);
+    return () => missionEmitter.removeEventListener("loot_banked", banked);
+  }, [onBank]);
+
+  // H toggles the hoard ledger
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key.toLowerCase() === "h" && !event.repeat) setShowLedger(previous => !previous);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   const handleRegionChange = useCallback((r: WorldRegion) => {
     setCurrentRegion(r);
@@ -924,11 +975,12 @@ function OpenWorldView({
             />
           ))}
           <PlayerDragon dragon={dragon} />
+          <LootSystem dragon={dragon} hoard={hoard} />
           <Projectiles />
           <CombatFeedback />
         </Physics>
         <RegionTracker onRegionChange={handleRegionChange} />
-        <VRScene />
+        <VRScene claws={{ color: dragon.colors.horn, glow: dragon.colors.eye === "#1A1A1A" ? "#ffd27a" : dragon.colors.eye }} />
       </Canvas>
       </SceneBoundary>
 
@@ -975,12 +1027,15 @@ function OpenWorldView({
       />
 
       <VRLaunch />
-      <FlightHUD dragon={dragon} paused={paused} onPause={togglePause} />
+      <FlightHUD dragon={dragon} paused={paused} onPause={togglePause} hint="Fly low to snatch treasure · E: drop · H: hoard" />
       {manualPause && <div className="flight-pause-overlay"><h2>Flight paused</h2><button type="button" onClick={togglePause}>Resume flight</button></div>}
       <OpenWorldHUD
         region={currentRegion}
         discoveredBeacons={discoveredBeacons}
+        hoard={hoard}
       />
+      <TalonPanel />
+      <LootToasts />
 
       {entryBanner && (
         <div key={bannerKey} className="ow-entry-banner">
@@ -1010,6 +1065,10 @@ function OpenWorldView({
         MAP [M]
       </button>
 
+      <button type="button" className="ow-map-btn ow-ledger-btn" onClick={() => setShowLedger(true)}>
+        HOARD [H]
+      </button>
+
       <button
         type="button"
         className="hud-settings-btn"
@@ -1029,6 +1088,10 @@ function OpenWorldView({
             setControlScheme(settings.scheme);
           }}
         />
+      )}
+
+      {showLedger && (
+        <HoardLedger hoard={hoard} dragon={dragon} saveUnavailable={hoardSaveUnavailable} onClose={() => setShowLedger(false)} />
       )}
 
       {showMap && (
@@ -1288,6 +1351,9 @@ function GameWorld({
 
 export default function App() {
   const { progress: guardianProgress, saveVictory, saveUnavailable } = useGuardianProgress();
+  const { hoard, bank: bankHoard, saveUnavailable: hoardSaveUnavailable } = useHoard();
+  const { progress: raidProgress, record: recordRaid, saveUnavailable: raidSaveUnavailable } = useScavengerProgress();
+  const [currentLair, setCurrentLair] = useState<LairDef>(LAIRS[0]);
   const [screen, setScreen] = useState<AppScreen>("dragon_select");
   const [selectedDragon, setSelectedDragon] = useState<DragonType | null>(null);
   const [currentMission, setCurrentMission] = useState<MissionDefinition>(
@@ -1314,7 +1380,35 @@ export default function App() {
         dragon={selectedDragon}
         onMissions={() => setScreen("mission_select")}
         onOpenWorld={() => setScreen("open_world")}
+        onScavengers={() => setScreen("scavenger_select")}
         onBack={() => setScreen("dragon_select")}
+      />
+    );
+  }
+
+  if (screen === "scavenger_select") {
+    return (
+      <ScavengerSelect
+        progress={raidProgress}
+        saveUnavailable={raidSaveUnavailable}
+        onRaid={(lair) => {
+          setCurrentLair(lair);
+          setScreen("scavenger_raid");
+        }}
+        onBack={() => setScreen("mode_select")}
+      />
+    );
+  }
+
+  if (screen === "scavenger_raid") {
+    return (
+      <ScavengerMode
+        key={currentLair.id}
+        lair={currentLair}
+        progress={raidProgress}
+        onRecord={recordRaid}
+        saveUnavailable={raidSaveUnavailable}
+        onLeave={() => setScreen("scavenger_select")}
       />
     );
   }
@@ -1325,6 +1419,9 @@ export default function App() {
         dragon={selectedDragon}
         onSwap={setSelectedDragon}
         onBack={() => setScreen("mode_select")}
+        hoard={hoard}
+        onBank={bankHoard}
+        hoardSaveUnavailable={hoardSaveUnavailable}
       />
     );
   }

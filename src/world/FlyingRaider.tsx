@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useFrame } from "@react-three/fiber";
-import { Billboard, useAnimations, useGLTF } from "@react-three/drei";
+import { Billboard, useGLTF } from "@react-three/drei";
 import { BallCollider, RigidBody, interactionGroups, useRapier } from "@react-three/rapier";
 import type { RapierRigidBody } from "@react-three/rapier";
 import { SkeletonUtils } from "three-stdlib";
@@ -9,6 +9,7 @@ import { colorDragonModel, DRAGON_TYPES } from "../dragons";
 import { WORLD_ONLY } from "../game/aim";
 import { advanceRaider, createRaiderState, RAIDER_HP, RAIDER_ID, RAIDER_SPAWN } from "../game/raider";
 import { gameSession, missionEmitter, playerPos, playerStatus } from "../game/runtime";
+import { useDragonAnimations } from "./useDragonAnimations";
 
 const RAIDER_COLOR = { ...DRAGON_TYPES[0].colors, body: "#453849", wing: "#842f46", belly: "#ad704e", eye: "#ffbe5c", horn: "#211b27", spike: "#211b27" };
 
@@ -33,13 +34,9 @@ export default function FlyingRaider() {
     clone.rotation.y = Math.PI;
     return clone;
   }, [source]);
-  const { actions, mixer } = useAnimations(animations, scene);
+  useDragonAnimations(scene, animations);
   useEffect(() => {
-    const action = actions["Dragon_Flying"] ?? Object.values(actions)[0];
-    action?.reset().play();
     return () => {
-      action?.stop();
-      mixer.uncacheRoot(scene);
       const owned = new Set<THREE.Material>();
       scene.traverse(child => {
         if (!(child as THREE.Mesh).isMesh) return;
@@ -48,7 +45,7 @@ export default function FlyingRaider() {
       });
       owned.forEach(material => material.dispose());
     };
-  }, [actions, mixer, scene]);
+  }, [scene]);
 
   useEffect(() => {
     const hit = (event: Event) => {
