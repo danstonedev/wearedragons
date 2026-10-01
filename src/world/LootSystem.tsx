@@ -4,7 +4,7 @@ import { BallCollider, RigidBody } from "@react-three/rapier";
 import * as THREE from "three";
 import type { DragonType } from "../dragons";
 import {
-  TREASURES, TREASURE_KINDS, createCommonLoot, resolveTreasureSpot, skyDrift, appraise, emptyTalons, grabWith, releaseFrom,
+  ALL_TREASURES, TREASURE_KINDS, createCommonLoot, resolveTreasureSpot, skyDrift, appraise, emptyTalons, grabWith, releaseFrom,
   carryLoad, stepLooseLoot, inLake, inSea, inHoardZone, hoardFloor, dunkBonus, HOARD_SITE, hoardMoundHeight, talonsNeeded, hoardRank,
 } from "../game/loot";
 import type { HoardProgress, TalonSide, Talons, TreasureDef, TreasureKind } from "../game/loot";
@@ -16,10 +16,10 @@ import { device } from "../utils/device";
 import { createTreasureMaterial, RARITY_COLORS, treasureCenter, treasureGeometry } from "./treasureModels";
 import DragonClaw from "./DragonClaw";
 import { talonAnchor } from "../game/claws";
-import { lootHud, lootMap, lootToast } from "../game/lootRuntime";
+import { lootHolders, lootHud, lootMap, lootToast } from "../game/lootRuntime";
 import type { CarriedSummary } from "../game/lootRuntime";
 
-type ItemState = "world" | "falling" | "carried" | "banked";
+type ItemState = "world" | "falling" | "carried" | "held" | "banked";
 
 interface LootItem {
   def: TreasureDef;
@@ -29,6 +29,8 @@ interface LootItem {
   velocity: THREE.Vector3;
   state: ItemState;
   side: TalonSide | "both" | null;
+  /** Rival dragon or scavenger holding it (state "held"). */
+  holder: string | null;
   /** Dangling center while carried. */
   hang: THREE.Vector3;
   hangPrev: THREE.Vector3;
@@ -75,12 +77,12 @@ function headingTo(dx: number, dz: number) {
 
 function createItems(banked: HoardProgress["banked"]): LootItem[] {
   let slot = 0;
-  return [...TREASURES, ...createCommonLoot()].map((def, index) => {
+  return [...ALL_TREASURES, ...createCommonLoot()].map((def, index) => {
     const spot = resolveTreasureSpot(def);
     const isBanked = def.unique && Boolean(banked[def.id]);
     const home = new THREE.Vector3(spot.x, spot.y, spot.z);
     return {
-      def, home, position: home.clone(), velocity: new THREE.Vector3(), state: isBanked ? "banked" : "world", side: null,
+      def, home, position: home.clone(), velocity: new THREE.Vector3(), state: isBanked ? "banked" : "world", side: null, holder: null,
       hang: new THREE.Vector3(), hangPrev: new THREE.Vector3(), anchor: new THREE.Vector3(), releaseY: 0, ignoreUntil: 0,
       onLantern: def.perch === "sky" && !isBanked, lanternFreedAt: -1, slot: isBanked ? slot++ : -1,
       phase: index * 1.37, scale: def.kind === "chest" ? 1.15 : 1.35, center: treasureCenter(def.kind),
@@ -154,6 +156,78 @@ export default function LootSystem({ dragon, hoard }: { dragon: DragonType; hoar
     for (const mesh of [lanterns.lantern, lanterns.rope]) { mesh.geometry.dispose(); (mesh.material as THREE.Material).dispose(); mesh.dispose(); }
   }, [lanterns]);
 
+  // Rivals snatch from your talons, drop when hit, and stash at their hoards; scavengers
+  // claim loose treasure; a knockout shakes everything loose.
+  useEffect(() => {
+    const letGo = (item: LootItem, velocity: { x: number; y: number; z: number }, ignore: number) => {
+      item.state = "falling";
+      item.side = null;
+      item.holder = null;
+      item.position.copy(item.hang);
+      item.position.y -= item.center * item.scale;
+      item.velocity.set(velocity.x, velocity.y, velocity.z);
+      item.releaseY = item.position.y;
+      item.ignoreUntil = gameSession.elapsed + ignore;
+    };
+    const steal = (event: Event) => {
+      const detail = (event as CustomEvent<{ holder: string; name: string; result: string | null }>).detail;
+      const side = talons.current.right ? "right" : talons.current.left ? "left" : null;
+      if (!side || gameSession.paused) return;
+      const { talons: next, itemId } = releaseFrom(talons.current, side);
+      const item = items.find(candidate => candidate.def.id === itemId);
+      if (!item) return;
+      talons.current = next;
+      item.state = "held";
+      item.side = null;
+      item.holder = detail.holder;
+      detail.result = item.def.id;
+      lootToast(`${detail.name} snatched your ${item.def.name}!`, "warn");
+      missionEmitter.dispatchEvent(new CustomEvent("loot_stolen", { detail: { id: item.def.id, holder: detail.holder } }));
+    };
+    const drop = (event: Event) => {
+      const { holder } = (event as CustomEvent<{ holder: string }>).detail;
+      const source = lootHolders.get(holder);
+      for (const item of items) {
+        if (item.state === "held" && item.holder === holder) letGo(item, { x: source?.vx ?? 0, y: (source?.vy ?? 0) * 0.5, z: source?.vz ?? 0 }, 0.6);
+      }
+    };
+    const stash = (event: Event) => {
+      const { holder, spot } = (event as CustomEvent<{ holder: string; spot: { x: number; y: number; z: number } }>).detail;
+      let n = 0;
+      for (const item of items) {
+        if (item.state !== "held" || item.holder !== holder) continue;
+        const angle = item.phase + n++ * 2.4;
+        item.state = "world";
+        item.holder = null;
+        item.position.set(spot.x + Math.cos(angle) * 1.8, spot.y, spot.z + Math.sin(angle) * 1.8);
+        item.ignoreUntil = gameSession.elapsed + 1;
+      }
+    };
+    const claim = (event: Event) => {
+      const detail = (event as CustomEvent<{ holder: string; itemId: string; result: boolean }>).detail;
+      const item = items.find(candidate => candidate.def.id === detail.itemId);
+      if (!item || item.state !== "world" || item.onLantern || gameSession.elapsed < item.ignoreUntil) return;
+      item.state = "held";
+      item.holder = detail.holder;
+      item.hang.copy(item.position);
+      item.hang.y += item.center * item.scale;
+      item.hangPrev.copy(item.hang);
+      detail.result = true;
+    };
+    const knockout = () => {
+      for (const side of ["right", "left"] as const) {
+        const { talons: next, itemId } = releaseFrom(talons.current, side);
+        const item = items.find(candidate => candidate.def.id === itemId);
+        if (!item) continue;
+        talons.current = next;
+        letGo(item, { x: playerVelocity.x * 0.5, y: 2, z: playerVelocity.z * 0.5 }, 2);
+      }
+    };
+    const events: [string, (event: Event) => void][] = [["loot_steal", steal], ["loot_holder_drop", drop], ["loot_holder_stash", stash], ["loot_claim", claim], ["player_knockout", knockout]];
+    events.forEach(([name, handler]) => missionEmitter.addEventListener(name, handler));
+    return () => events.forEach(([name, handler]) => missionEmitter.removeEventListener(name, handler));
+  }, [items]);
+
   // Desktop drop key. Touch uses the HUD button; VR opens the claw.
   useEffect(() => {
     const key = (event: KeyboardEvent) => {
@@ -207,6 +281,8 @@ export default function LootSystem({ dragon, hoard }: { dragon: DragonType; hoar
     if (item.onLantern) { item.onLantern = false; item.lanternFreedAt = gameSession.elapsed; }
     const appraisal = appraise(item.def, dragonRef.current.id);
     missionEmitter.dispatchEvent(new CustomEvent("loot_snatched", { detail: { id: item.def.id, side: grab.side } }));
+    // Lifting a crown treasure off a royal hoard wakes the whole kingdom.
+    if (item.def.royal) missionEmitter.dispatchEvent(new CustomEvent("kingdom_alarm", { detail: { kingdom: item.def.royal, item: item.def.name } }));
     missionEmitter.dispatchEvent(new CustomEvent("impact", { detail: { position: { x: item.hang.x, y: item.hang.y, z: item.hang.z }, color: RARITY_COLORS[item.def.rarity], quiet: true } }));
     const legendary = item.def.rarity === "legendary";
     lootToast(`${legendary ? "★ " : ""}SNATCHED ${item.def.name.toUpperCase()} · ${appraisal.value} gold${appraisal.favored ? ` · ${dragonRef.current.name} taste ×${appraisal.multiplier}` : ""}`, legendary ? "legend" : "gold");
@@ -347,10 +423,26 @@ export default function LootSystem({ dragon, hoard }: { dragon: DragonType; hoar
       // Carried treasure swings on a short tether below each claw.
       let weight = 0;
       for (const item of items) {
-        if (item.state === "carried") {
+        if (item.state === "carried" || item.state === "held") {
           const side = item.side;
           const anchor = item.anchor;
-          if (side === "both") {
+          let length = item.def.weight >= 3 ? 0.85 : 0.5;
+          if (item.state === "held") {
+            // Hanging from a rival's claws, or slung on a scavenger's back.
+            const holder = item.holder ? lootHolders.get(item.holder) : undefined;
+            if (!holder) {
+              item.state = "falling";
+              item.holder = null;
+              item.position.copy(item.hang);
+              item.position.y -= item.center * item.scale;
+              item.velocity.set(0, 0, 0);
+              item.releaseY = item.position.y;
+              item.ignoreUntil = now + 0.5;
+              continue;
+            }
+            anchor.set(holder.x, holder.y + (holder.carry === "back" ? 1.0 : -1.4), holder.z);
+            if (holder.carry === "back") length = 0.2;
+          } else if (side === "both") {
             const a = clawInput.active && clawInput.left.tracked ? clawInput.left.target : talonState.left;
             const b = clawInput.active && clawInput.right.tracked ? clawInput.right.target : talonState.right;
             anchor.set((a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2);
@@ -360,7 +452,6 @@ export default function LootSystem({ dragon, hoard }: { dragon: DragonType; hoar
             anchor.set(source.x, source.y, source.z);
           }
           // Position Verlet: the treasure lags, swings on turns, and settles below the claw.
-          const length = item.def.weight >= 3 ? 0.85 : 0.5;
           prev.copy(item.hang);
           const damping = Math.exp(-2.4 * delta);
           item.hang.set(
@@ -375,8 +466,10 @@ export default function LootSystem({ dragon, hoard }: { dragon: DragonType; hoar
           const clearance = terrainHeight(item.hang.x, item.hang.z, "open") + item.center * item.scale;
           if (item.hang.y < clearance) item.hang.y = clearance;
           item.hangPrev.copy(prev);
-          weight += item.def.weight;
-          if (inHoardZone(item.hang, floor)) bank(item);
+          if (item.state === "carried") {
+            weight += item.def.weight;
+            if (inHoardZone(item.hang, floor)) bank(item);
+          }
         } else if (item.state === "falling") {
           const next = stepLooseLoot({ position: item.position, velocity: item.velocity, resting: false }, delta, groundAt);
           item.position.set(next.position.x, next.position.y, next.position.z);
@@ -432,7 +525,7 @@ export default function LootSystem({ dragon, hoard }: { dragon: DragonType; hoar
       batch.members.forEach((item, i) => {
         if (item.state === "banked" && item.slot < 0) { batch.mesh.setMatrixAt(i, zero); return; }
         let scale = item.scale;
-        if (item.state === "carried") {
+        if (item.state === "carried" || item.state === "held") {
           // Hang upright along the tether, facing the dragon's heading.
           dir.copy(item.anchor).sub(item.hang);
           if (dir.lengthSq() > 1e-6) dir.normalize(); else dir.set(0, 1, 0);

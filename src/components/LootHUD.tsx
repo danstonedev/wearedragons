@@ -3,7 +3,7 @@ import type { CSSProperties } from "react";
 import { lootHud } from "../game/lootRuntime";
 import type { CarriedSummary } from "../game/lootRuntime";
 import { gameSession, lootInput, missionEmitter } from "../game/runtime";
-import { TREASURES, TRIBE_TASTES, hoardRank } from "../game/loot";
+import { ALL_TREASURES, TRIBE_TASTES, hoardRank } from "../game/loot";
 import type { HoardProgress, LootRegion, TreasureRarity } from "../game/loot";
 import { DRAGON_TYPES } from "../dragons";
 import type { DragonType } from "../dragons";
@@ -70,8 +70,8 @@ export function LootToasts() {
 
 /** Compact hoard summary beside the region name. */
 export function HoardChip({ hoard }: { hoard: HoardProgress }) {
-  const found = TREASURES.filter(def => hoard.banked[def.id]).length;
-  return <div className="hoard-chip">✦ HOARD {hoard.gold.toLocaleString()} · {hoardRank(hoard.gold).title.toUpperCase()} · {found}/{TREASURES.length} TREASURES</div>;
+  const found = ALL_TREASURES.filter(def => hoard.banked[def.id]).length;
+  return <div className="hoard-chip">✦ HOARD {hoard.gold.toLocaleString()} · {hoardRank(hoard.gold).title.toUpperCase()} · {found}/{ALL_TREASURES.length} TREASURES</div>;
 }
 
 const REGION_LABEL: Record<LootRegion, string> = { pyrrhia: "Pyrrhia", pantala: "Pantala", glaeryus: "Glaeryus" };
@@ -82,7 +82,7 @@ export function HoardLedger({ hoard, dragon, onClose, saveUnavailable }: { hoard
   const rank = hoardRank(hoard.gold);
   const taste = TRIBE_TASTES[dragon.id];
   const names = new Map(DRAGON_TYPES.map(item => [item.id, item.name]));
-  const found = TREASURES.filter(def => hoard.banked[def.id]).length;
+  const found = ALL_TREASURES.filter(def => hoard.banked[def.id]).length;
   return <div className="ow-map-overlay" onClick={onClose}>
     <div className="ledger-panel" onClick={event => event.stopPropagation()} role="dialog" aria-label="Hoard ledger">
       <div className="ow-map-header">
@@ -91,7 +91,7 @@ export function HoardLedger({ hoard, dragon, onClose, saveUnavailable }: { hoard
       </div>
       <div className="ledger-summary">
         <strong>{hoard.gold.toLocaleString()} gold · {rank.title}</strong>
-        <span>{found}/{TREASURES.length} treasures · {hoard.deliveries} deliveries{rank.next ? ` · next title at ${rank.next.toLocaleString()} gold` : ""}</span>
+        <span>{found}/{ALL_TREASURES.length} treasures · {hoard.deliveries} deliveries{rank.next ? ` · next title at ${rank.next.toLocaleString()} gold` : ""}</span>
         {taste && <span className="ledger-taste">{taste.blurb} Favorites are worth ×{taste.multiplier} when {dragon.name} brings them home.</span>}
         <span className="ledger-tip">Fly low to snatch treasure in your talons. Carry it into the glowing ring around your hoard, or drop it in from high above for a dunk bonus. Lit beacons reveal treasure on the map.</span>
         {saveUnavailable && <span role="status">Browser storage is unavailable; this hoard lasts for this session.</span>}
@@ -99,7 +99,7 @@ export function HoardLedger({ hoard, dragon, onClose, saveUnavailable }: { hoard
       <div className="ledger-columns">
         {(["pyrrhia", "pantala", "glaeryus"] as const).map(region => <section key={region}>
           <h3>{REGION_LABEL[region]}</h3>
-          {TREASURES.filter(def => def.region === region).map(def => {
+          {ALL_TREASURES.filter(def => def.region === region).map(def => {
             const record = hoard.banked[def.id];
             return <div key={def.id} className={`ledger-item${record ? " found" : ""}`} style={{ "--rarity": RARITY_COLORS[def.rarity] } as CSSProperties}>
               <div className="ledger-item-top">

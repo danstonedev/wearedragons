@@ -22,3 +22,12 @@ export const lootMap = { items: [] as { x: number; z: number; rarity: TreasureRa
 export function lootToast(text: string, tone: "gold" | "info" | "warn" | "legend" = "info") {
   missionEmitter.dispatchEvent(new CustomEvent("loot_toast", { detail: { text, tone } }));
 }
+
+/** A rival dragon or scavenger that can hold treasure; positions are refreshed every frame. */
+export interface LootHolder {
+  x: number; y: number; z: number;
+  vx: number; vy: number; vz: number;
+  /** Dangling from a dragon's claws, or slung on a scavenger's back. */
+  carry: "claws" | "back";
+}
+export const lootHolders = new Map<string, LootHolder>();

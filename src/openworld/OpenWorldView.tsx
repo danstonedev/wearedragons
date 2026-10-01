@@ -26,7 +26,8 @@ import CombatFeedback from "../world/CombatFeedback";
 import LootSystem from "../world/LootSystem";
 import MissionTimer from "../world/MissionTimer";
 import PlayerDragon from "../world/PlayerDragon";
-import Projectiles from "../world/Projectiles";
+import Projectiles, { EnemyProjectiles } from "../world/Projectiles";
+import RivalDragons from "../world/RivalDragons";
 import Vegetation from "../world/Vegetation";
 import WorldDetails from "../world/WorldDetails";
 import WorldTerrain from "../world/WorldTerrain";
@@ -36,6 +37,8 @@ import Windways from "../world/Windways";
 import KingdomTracker from "./KingdomTracker";
 import WorldBeacon from "./WorldBeacon";
 import WorldMap from "./WorldMap";
+import CombatHUD from "./CombatHUD";
+import { useVitality } from "./useVitality";
 import { sharedMapPainter } from "./worldMapImage";
 
 /** "SkyWings", "HiveWings, SilkWings and LeafWings": the tribes that guard a kingdom. */
@@ -101,6 +104,7 @@ export default function OpenWorldView({ dragon, onSwap, onBack, hoard, onBank, h
   const [showLedger, setShowLedger] = useState(false);
   const { paused, manualPause, togglePause } = useWorldSession(showSettings || showMap || showLedger);
   const budget = renderingBudget(device);
+  const { vitality, hurt, knockedOut } = useVitality(dragon);
   useMapPreload();
 
   // Deliveries are decided in the frame loop and persisted here.
@@ -159,6 +163,8 @@ export default function OpenWorldView({ dragon, onSwap, onBack, hoard, onBank, h
             <PlayerDragon dragon={dragon} />
             <LootSystem dragon={dragon} hoard={hoard} />
             <Projectiles />
+            <EnemyProjectiles />
+            <RivalDragons dragon={dragon} />
             <CombatFeedback />
           </Physics>
           <KingdomTracker onChange={handleKingdom} />
@@ -196,6 +202,7 @@ export default function OpenWorldView({ dragon, onSwap, onBack, hoard, onBank, h
       <FlightHUD dragon={dragon} paused={paused} onPause={togglePause} hint="Fly low to snatch treasure · E: drop · H: hoard · M: map" />
       {manualPause && <div className="flight-pause-overlay"><h2>Flight paused</h2><button type="button" onClick={togglePause}>Resume flight</button></div>}
       <OpenWorldHUD kingdom={kingdom} tribe={dragon.id} discovered={discovered} hoard={hoard} />
+      <CombatHUD vitality={vitality} hurt={hurt} knockedOut={knockedOut} />
       <TalonPanel />
       <LootToasts />
 

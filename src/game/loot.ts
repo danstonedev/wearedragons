@@ -1,6 +1,8 @@
 import { createPlantings, formationTop, regionalFormations, terrainHeight } from "./landscape.ts";
 import { SEA_LEVEL, shorelineZ } from "./coast.ts";
 import { HOME_LAKE } from "./world.ts";
+import { ROYAL_HOARDS } from "./worldSites.ts";
+import type { RoyalKingdom } from "./worldSites.ts";
 import type { Vector3Like } from "./flight.ts";
 
 export type TreasureKind =
@@ -11,7 +13,7 @@ export const TREASURE_KINDS: readonly TreasureKind[] = [
   "fruit", "spool", "kettle", "boot", "trinket", "hourglass", "harp", "shield",
 ];
 export type TreasureRarity = "junk" | "common" | "rare" | "legendary";
-export type TreasurePerch = "ground" | "treetop" | "spire" | "sky";
+export type TreasurePerch = "ground" | "treetop" | "spire" | "sky" | "royal";
 export type LootRegion = "pyrrhia" | "pantala" | "glaeryus";
 
 export interface TreasureDef {
@@ -34,6 +36,8 @@ export interface TreasureDef {
   at: readonly [number, number];
   /** Height above terrain for sky lanterns. */
   altitude?: number;
+  /** Crown treasure of a kingdom's royal hoard (`at` is then an offset from the hoard). Taking it alerts the kingdom. */
+  royal?: RoyalKingdom;
 }
 
 const unique = (
@@ -72,7 +76,24 @@ export const TREASURES: readonly TreasureDef[] = [
   unique("frozen_king_vault", "Frozen King's Vault", "chest", "glaeryus", 520, 3, "legendary", ["gold", "chest", "ice"], "ground", [-168, 133], "Iced shut for a thousand years. Bring both talons.", "#d8f1ff"),
 ];
 
-export const TREASURE_BY_ID: ReadonlyMap<string, TreasureDef> = new Map(TREASURES.map(def => [def.id, def]));
+/** Royal treasures lie on each kingdom's royal hoard, guarded by its champion. */
+const royal = (id: string, name: string, kind: TreasureKind, region: LootRegion, value: number, weight: number, tags: string[], kingdom: RoyalKingdom, lore: string, tint: string): TreasureDef =>
+  ({ id, name, kind, region, value, weight, rarity: "legendary", tags, tint, lore, unique: true, perch: "royal", at: [0.6, -0.4], royal: kingdom });
+
+export const ROYAL_TREASURES: readonly TreasureDef[] = [
+  royal("sky_ruby_crown", "The Queen's Ruby Crown", "crown", "pyrrhia", 560, 1, ["gold", "crown", "fire"], "sky", "The SkyWing queen's favourite. She has seventeen others, and she will still want this one back.", "#ff5a4a"),
+  royal("ice_diadem", "Diadem of Endless Winter", "crown", "pyrrhia", 540, 1, ["crown", "ice", "gem"], "ice", "Cold enough to frost your claws through a glove you are not wearing.", "#bff0ff"),
+  royal("mud_golden_idol", "The Golden Sibling", "idol", "pyrrhia", 480, 2, ["gold", "relic", "stone"], "mud", "A golden statue of the first MudWing big brother. Heavy. Loved. Guarded.", "#e0a83a"),
+  royal("rain_sunlight_fruit", "The Sunlight Fruit", "fruit", "pyrrhia", 260, 1, ["fruit"], "rainforest", "It glows. RainWings say one bite feels like a whole afternoon of sunbathing.", "#ffd34a"),
+  royal("sand_eye_of_dunes", "Eye of the Dunes", "orb", "pyrrhia", 600, 1, ["gold", "orb", "relic"], "sand", "Whoever holds it can see across the whole desert. Or so the Scorpion Den sells it.", "#ffcc66"),
+  royal("pantala_hive_book", "Book of the Hive", "scroll", "pantala", 500, 1, ["scroll", "amber"], "pantala", "Every page is a map of the hives. Some of the maps are of hives that do not exist yet.", "#e8b84a"),
+  royal("glaeryus_war_helm", "Obsidian War Shield", "shield", "glaeryus", 520, 2, ["relic", "stone"], "glaeryus", "Forged from volcanic glass by dragons who never lost a battle. They lost the war.", "#4a4a5e"),
+  royal("sea_deep_pearl", "Pearl of the Deep Tide", "pearl", "glaeryus", 560, 1, ["pearl"], "sea", "The SeaWing admiral swears it hums with the tide. It does, a little.", "#bff6ff"),
+];
+
+/** Every unique treasure in the world: the home valley's, then the kingdoms'. */
+export const ALL_TREASURES: readonly TreasureDef[] = [...TREASURES, ...ROYAL_TREASURES];
+export const TREASURE_BY_ID: ReadonlyMap<string, TreasureDef> = new Map(ALL_TREASURES.map(def => [def.id, def]));
 
 export function regionOf(x: number, z: number): LootRegion {
   if (z <= 30) return "pyrrhia";
@@ -138,6 +159,10 @@ export function resolveTreasureSpot(def: TreasureDef): TreasureSpot {
     let best = formations[0];
     for (const formation of formations) if (Math.hypot(formation.x - x, formation.z - z) < Math.hypot(best.x - x, best.z - z)) best = formation;
     return { x: best.x, y: formationTop(best) - 0.25, z: best.z };
+  }
+  if (def.perch === "royal" && def.royal) {
+    const hoard = ROYAL_HOARDS[def.royal];
+    return { x: hoard.x + x, y: hoard.y + 0.55, z: hoard.z + z };
   }
   const ground = terrainHeight(x, z, "open");
   if (def.perch === "sky") return { x, y: Math.max(ground, LAKE.surface) + (def.altitude ?? 20), z };
@@ -302,7 +327,7 @@ export function parseHoard(raw: string | null): HoardProgress {
     if (Number.isFinite(input.gold) && input.gold >= 0) result.gold = Math.min(MAX_GOLD, Math.floor(input.gold));
     if (Number.isSafeInteger(input.deliveries) && input.deliveries >= 0) result.deliveries = input.deliveries;
     if (input.banked && typeof input.banked === "object") {
-      for (const def of TREASURES) {
+      for (const def of ALL_TREASURES) {
         const record = input.banked[def.id];
         if (record && typeof record.by === "string" && DRAGON_ID.test(record.by) && Number.isFinite(record.value) && record.value >= 0) {
           result.banked[def.id] = { by: record.by, value: Math.min(MAX_GOLD, Math.round(record.value)) };
