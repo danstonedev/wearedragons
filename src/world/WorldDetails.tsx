@@ -5,6 +5,7 @@ import { createScatter, terrainHeight } from "../game/landscape";
 import type { LandscapeKind } from "../game/landscape";
 import { finalizeInstances, renderingBudget } from "../game/rendering";
 import { device } from "../utils/device";
+import Ocean from "./Ocean";
 
 function pathGeometry(points: Array<[number, number]>, kind: LandscapeKind, width: number) {
   const vertices: number[] = [];
@@ -31,7 +32,7 @@ function MountainBackdrop({ kind }: { kind: LandscapeKind }) {
     const radius = kind === "ridge" ? 142 + Math.sin(i * 2.7) * 12 : 228 + Math.sin(i * 1.9) * 18;
     const height = 24 + (Math.sin(i * 4.13) * 0.5 + 0.5) * 35;
     return { x: Math.sin(angle) * radius, z: Math.cos(angle) * radius, height, width: 15 + height * 0.35, rotation: angle };
-  }), [kind]);
+  }).filter(mountain => kind !== "open" || mountain.z < 110), [kind]);
   const geometry = useMemo(() => {
     const ridge = new THREE.ConeGeometry(1, 1, 12, 7);
     const vertices = ridge.attributes.position;
@@ -97,7 +98,7 @@ function RegionalLandmarks() {
     const z = 44 + (lane * 53 % 145);
     const height = 5 + (lane * 19 % 14);
     return { eastern, x, z, height, rotation: (lane * 2.17) % Math.PI };
-  }), []);
+  }).filter(formation => formation.z < 110), []);
   const rocks = useRef<THREE.InstancedMesh>(null);
   const geometry = useMemo(() => new THREE.IcosahedronGeometry(1, 2), []);
   useEffect(() => {
@@ -163,5 +164,6 @@ export default function WorldDetails({ kind }: { kind: LandscapeKind }) {
       <meshStandardMaterial color="#8a7658" roughness={1} polygonOffset polygonOffsetFactor={-1} />
     </mesh>)}
     {kind === "open" && <Lake />}
+    {kind === "open" && <Ocean />}
   </>;
 }
