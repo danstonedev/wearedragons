@@ -6,6 +6,8 @@ import { KINGDOMS } from "../game/world";
 import type { KingdomId } from "../game/world";
 import { beaconBase } from "../game/worldSites";
 import { RARITY_COLORS } from "../world/treasureModels";
+import { windwaySamples } from "../game/windways";
+import { WORLD_BOUNDS } from "../game/world";
 import { mapPercent, sharedMapPainter } from "./worldMapImage";
 
 /** Where each kingdom's name is lettered on the map. */
@@ -13,6 +15,12 @@ const LABELS: Record<KingdomId, [number, number]> = {
   pyrrhia: [0, -250], pantala: [420, 40], glaeryus: [-430, 40], sky: [10, -820], ice: [-560, -860],
   mud: [-620, -360], rainforest: [560, -860], sand: [580, -380], sea: [0, 300],
 };
+
+const WINDWAY_PATHS = windwaySamples().map(samples => samples.filter((_, i) => i % 6 === 0).map((sample, i) => {
+  const x = (sample.x - WORLD_BOUNDS.minX) / (WORLD_BOUNDS.maxX - WORLD_BOUNDS.minX) * 100;
+  const y = (sample.z - WORLD_BOUNDS.minZ) / (WORLD_BOUNDS.maxZ - WORLD_BOUNDS.minZ) * 100;
+  return `${i ? "L" : "M"}${x.toFixed(2)},${y.toFixed(2)}`;
+}).join(" ") + " Z");
 
 function useLivePlayer() {
   const [player, setPlayer] = useState(() => ({ x: playerPos.x, z: playerPos.z, heading: playerStatus.heading }));
@@ -56,6 +64,10 @@ export default function WorldMap({ discovered, onClose }: { discovered: Readonly
         <div className="ow-map-grid ow-map-world" style={{ aspectRatio: `${painter.width} / ${painter.height}` }}>
           <canvas ref={canvas} width={painter.width} height={painter.height} className="ow-map-canvas" />
           {painting && <span className="ow-map-painting">Charting the continent…</span>}
+          {/* Windways: ride them to cross the continent fast. */}
+          <svg className="ow-map-windways" viewBox="0 0 100 100" preserveAspectRatio="none">
+            {WINDWAY_PATHS.map((path, i) => <path key={i} d={path} />)}
+          </svg>
           {KINGDOMS.map(kingdom => <span key={kingdom.id} className="ow-map-region-label" style={{ ...mapPercent(...LABELS[kingdom.id]), color: kingdom.textColor }}>{kingdom.name.toUpperCase()}</span>)}
           {KINGDOMS.map(kingdom => {
             const base = beaconBase(kingdom);
@@ -76,6 +88,7 @@ export default function WorldMap({ discovered, onClose }: { discovered: Readonly
         <div className="ow-map-legend">
           <div className="ow-map-legend-item"><span style={{ color: "#ffd700" }}>✦</span> Lit beacon · ○ unlit (follow the light pillars)</div>
           <div className="ow-map-legend-item"><span style={{ color: "#ffd27a" }}>◆</span> Your hoard · lit beacons reveal treasure</div>
+          <div className="ow-map-legend-item"><span style={{ color: "#bfefff" }}>⤳</span> Windways carry you fast</div>
           <div className="ow-map-legend-item right">{discovered.size} / {KINGDOMS.length} beacons</div>
         </div>
       </div>

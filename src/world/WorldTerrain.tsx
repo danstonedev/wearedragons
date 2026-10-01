@@ -4,129 +4,44 @@ import { useRapier } from "@react-three/rapier";
 import type Rapier from "@dimforge/rapier3d-compat";
 import type { Collider, RigidBody, World } from "@dimforge/rapier3d-compat";
 import * as THREE from "three";
-import { CHUNKS_X, CHUNKS_Z, TILE_CHUNKS, TILES_X, TILES_Z, chooseLod, chunkDistance, chunkKey, getChunkSurface, getTileSurface, tileDistance } from "../game/terrainChunks";
-import type { TerrainLod } from "../game/terrainChunks";
+import { CHUNKS_X, CHUNKS_Z, TILE_CHUNKS, chunkDistance, chunkKey, getChunkSurface, getTileSurface } from "../game/terrainChunks";
+import type { ChunkSurface, TerrainLod } from "../game/terrainChunks";
 import { renderingBudget } from "../game/rendering";
 import { playerPos } from "../game/runtime";
 import { device } from "../utils/device";
 import { groundRelief } from "./groundRelief";
+import { createLodStreamer } from "./lodStreamer";
 
-interface TerrainMesh { mesh: THREE.Mesh; level: number }
-interface Wanted { key: string; tile: boolean; x: number; z: number; level: number; distance: number }
+function surfaceGeometry(surface: ChunkSurface) {
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.BufferAttribute(surface.positions, 3));
+  geometry.setAttribute("normal", new THREE.BufferAttribute(surface.normals, 3));
+  geometry.setAttribute("color", new THREE.BufferAttribute(surface.colors, 3));
+  geometry.setAttribute("uv", new THREE.BufferAttribute(surface.uvs, 2));
+  geometry.setIndex(new THREE.BufferAttribute(surface.indices, 1));
+  geometry.computeBoundingSphere();
+  return geometry;
+}
 
-/** Levels below this render chunk by chunk; coarser levels render whole tiles. */
-const NEAR_LEVELS = 2;
-
-/**
- * Streams terrain meshes nearest first. Near the dragon each chunk has its own mesh;
- * far away a 2x2 tile is one mesh, so the distant view costs few draw calls. A mesh is
- * only removed once whatever replaces it is on screen, so the ground never has holes.
- */
+/** Terrain levels below the second render per chunk; coarser ones as 2x2 tiles. */
 function createTerrainStreamer(lods: readonly TerrainLod[]) {
   const relief = groundRelief();
-  const group = new THREE.Group();
   const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.96, metalness: 0, bumpMap: relief, bumpScale: 0.22 });
-  const meshes = new Map<string, TerrainMesh>();
-  const geometries = new Map<string, THREE.BufferGeometry>();
-
-  const geometryFor = (item: Wanted) => {
-    const key = `${item.key},${item.level}`;
-    const cached = geometries.get(key);
-    if (cached) return cached;
-    const surface = item.tile
-      ? getTileSurface(item.x, item.z, lods[item.level].divisions * TILE_CHUNKS)
-      : getChunkSurface(item.x, item.z, lods[item.level].divisions);
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute("position", new THREE.BufferAttribute(surface.positions, 3));
-    geometry.setAttribute("normal", new THREE.BufferAttribute(surface.normals, 3));
-    geometry.setAttribute("color", new THREE.BufferAttribute(surface.colors, 3));
-    geometry.setAttribute("uv", new THREE.BufferAttribute(surface.uvs, 2));
-    geometry.setIndex(new THREE.BufferAttribute(surface.indices, 1));
-    geometry.computeBoundingSphere();
-    geometries.set(key, geometry);
-    return geometry;
+  const streamer = createLodStreamer({
+    levels: lods,
+    nearLevels: 2,
+    material,
+    chunk: (cx, cz, level) => surfaceGeometry(getChunkSurface(cx, cz, lods[level].divisions)),
+    tile: (tx, tz, level) => surfaceGeometry(getTileSurface(tx, tz, lods[level].divisions * TILE_CHUNKS)),
+  });
+  return {
+    ...streamer,
+    dispose() {
+      streamer.dispose();
+      material.dispose();
+      relief.dispose();
+    },
   };
-
-  const remove = (key: string) => {
-    const entry = meshes.get(key);
-    if (!entry) return;
-    group.remove(entry.mesh);
-    meshes.delete(key);
-  };
-  const tileKey = (tx: number, tz: number) => `t${tx},${tz}`;
-  const chunkKeysOf = (tx: number, tz: number) => {
-    const keys: string[] = [];
-    for (let j = 0; j < TILE_CHUNKS; j++) for (let i = 0; i < TILE_CHUNKS; i++) keys.push(`c${chunkKey(tx * TILE_CHUNKS + i, tz * TILE_CHUNKS + j)}`);
-    return keys;
-  };
-
-  const update = (x: number, z: number, budgetMs: number) => {
-    const start = performance.now();
-    const wanted: Wanted[] = [];
-    for (let tz = 0; tz < TILES_Z; tz++) for (let tx = 0; tx < TILES_X; tx++) {
-      const tKey = tileKey(tx, tz);
-      const tile = meshes.get(tKey);
-      const level = chooseLod(lods, tileDistance(tx, tz, x, z), tile?.level ?? -1);
-      if (level < 0) {
-        remove(tKey);
-        chunkKeysOf(tx, tz).forEach(remove);
-        continue;
-      }
-      if (level >= NEAR_LEVELS) {
-        if (tile?.level !== level) wanted.push({ key: tKey, tile: true, x: tx, z: tz, level, distance: tileDistance(tx, tz, x, z) });
-        else chunkKeysOf(tx, tz).forEach(remove);
-        continue;
-      }
-      let complete = true;
-      for (let j = 0; j < TILE_CHUNKS; j++) for (let i = 0; i < TILE_CHUNKS; i++) {
-        const cx = tx * TILE_CHUNKS + i, cz = tz * TILE_CHUNKS + j;
-        const key = `c${chunkKey(cx, cz)}`;
-        const entry = meshes.get(key);
-        const distance = chunkDistance(cx, cz, x, z);
-        const chunkLevel = Math.max(0, chooseLod(lods, distance, entry?.level ?? -1));
-        if (entry?.level !== chunkLevel) wanted.push({ key, tile: false, x: cx, z: cz, level: chunkLevel, distance });
-        if (!entry) complete = false;
-      }
-      if (complete) remove(tKey);
-    }
-    wanted.sort((a, b) => a.distance - b.distance);
-    for (const item of wanted) {
-      if (performance.now() - start > budgetMs) break;
-      const geometry = geometryFor(item);
-      const entry = meshes.get(item.key);
-      if (entry) {
-        entry.mesh.geometry = geometry;
-        entry.level = item.level;
-      } else {
-        const mesh = new THREE.Mesh(geometry, material);
-        mesh.receiveShadow = true;
-        mesh.matrixAutoUpdate = false;
-        group.add(mesh);
-        meshes.set(item.key, { mesh, level: item.level });
-      }
-      // The tile now covers its chunks (or the chunks may now replace their tile on the next pass).
-      if (item.tile) chunkKeysOf(item.x, item.z).forEach(remove);
-    }
-    // Free GPU copies of levels nobody is showing.
-    if (geometries.size > 200) {
-      const shown = new Set(Array.from(meshes.values(), entry => entry.mesh.geometry));
-      for (const [key, geometry] of geometries) {
-        if (shown.has(geometry)) continue;
-        geometry.dispose();
-        geometries.delete(key);
-      }
-    }
-  };
-
-  const dispose = () => {
-    geometries.forEach(geometry => geometry.dispose());
-    geometries.clear();
-    meshes.clear();
-    group.clear();
-    material.dispose();
-    relief.dispose();
-  };
-  return { group, update, dispose, timer: 0, meshes };
 }
 
 function TerrainChunks() {

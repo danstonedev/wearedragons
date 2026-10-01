@@ -30,6 +30,9 @@ import Projectiles from "../world/Projectiles";
 import Vegetation from "../world/Vegetation";
 import WorldDetails from "../world/WorldDetails";
 import WorldTerrain from "../world/WorldTerrain";
+import WorldScenery from "../world/WorldScenery";
+import Landmarks from "../world/landmarks/Landmarks";
+import Windways from "../world/Windways";
 import KingdomTracker from "./KingdomTracker";
 import WorldBeacon from "./WorldBeacon";
 import WorldMap from "./WorldMap";
@@ -147,6 +150,9 @@ export default function OpenWorldView({ dragon, onSwap, onBack, hoard, onBank, h
           <MissionTimer />
           <Physics debug={false} paused={paused}>
             <WorldTerrain />
+            <WorldScenery />
+            <Landmarks />
+            <Windways />
             <WorldDetails kind="open" />
             <Vegetation kind="open" />
             {KINGDOMS.map(item => <WorldBeacon key={item.id} kingdom={item} discovered={discovered.has(item.id)} onDiscovered={() => lightBeacon(item.id)} />)}

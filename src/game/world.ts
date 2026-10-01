@@ -59,6 +59,13 @@ export const MUD_POOLS: readonly { x: number; z: number; r: number }[] = [
   { x: -660, z: -420, r: 24 }, { x: -560, z: -120, r: 16 }, { x: -740, z: -300, r: 17 }, { x: -430, z: -150, r: 15 },
 ];
 export const MUD_LEVEL = 0.15;
+/** A sandstone arch big enough to fly through, and the half-buried bones of an ancient dragon. */
+export const GREAT_ARCH = { x: 690, z: -400, span: 54, height: 46 } as const;
+export const FALLEN_GIANT = { x: 600, z: -60, heading: 0.6 } as const;
+/** Canopy giants on the waterfall plateau; RainWings nap in their crowns. */
+export const RAINFOREST_GIANTS: readonly { x: number; z: number; height: number }[] = [
+  { x: 500, z: -745, height: 62 }, { x: 612, z: -762, height: 70 }, { x: 548, z: -805, height: 56 },
+];
 /** Rock pillars standing in the surf; the SeaWings' beacon burns on the first. */
 export const SEA_STACKS: readonly { x: number; z: number; r: number; top: number }[] = [
   { x: 60, z: 205, r: 7, top: 24 }, { x: -120, z: 196, r: 6, top: 30 }, { x: 210, z: 214, r: 8, top: 34 },

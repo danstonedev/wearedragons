@@ -147,7 +147,7 @@ export function buildSurface(originX: number, originZ: number, size: number, div
 export interface TerrainLod { divisions: number; distance: number }
 
 /** Pick the finest level whose range covers the chunk, with a little hysteresis. */
-export function chooseLod(lods: readonly TerrainLod[], distance: number, current = -1) {
+export function chooseLod(lods: readonly { distance: number }[], distance: number, current = -1) {
   for (let level = 0; level < lods.length; level++) {
     const slack = level === current ? 20 : 0;
     if (distance <= lods[level].distance + slack) return level;

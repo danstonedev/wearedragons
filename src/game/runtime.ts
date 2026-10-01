@@ -13,6 +13,8 @@ export const xrInput = { throttle: 0, stickThrottle: 0, climb: 0, fire: false, s
 /** World positions of the dragon's hind claws, refreshed by the player every frame. */
 export const talonState = { left: { x: 0, y: 4.6, z: 0.2 }, right: { x: 0, y: 4.6, z: 0.2 }, ready: false };
 export const playerVelocity = { x: 0, y: 0, z: 0 };
+/** The air's push on the dragon (windways and the storm wall), written by the open world's wind system. */
+export const windState = { x: 0, y: 0, z: 0, windway: -1, strength: 0 };
 /** Treasure weight slows the flight model; written by the loot system. */
 export const carryState = { speedFactor: 1, climbFactor: 1 };
 export const lootInput = { drop: false };

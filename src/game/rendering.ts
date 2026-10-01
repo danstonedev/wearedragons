@@ -28,6 +28,11 @@ export function renderingBudget(device: string) {
     worldFog: constrained ? [110, 440] as const : [170, 720] as const,
     /** Terrain colliders stream in around the player within this radius. */
     colliderRadius: constrained ? 100 : 130,
+    /** Open-world scenery: full detail out to `sceneryNear`, big silhouettes out to `sceneryFar`. */
+    sceneryNear: constrained ? 150 : 240,
+    sceneryFar: constrained ? 320 : 540,
+    /** Placement tries per 100-unit chunk (roughly half become scenery). */
+    sceneryAttempts: constrained ? 70 : 140,
   };
 }
 
