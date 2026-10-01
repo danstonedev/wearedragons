@@ -1,4 +1,5 @@
 export type LandscapeKind = "ridge" | "open";
+import { coastalHeight, shorelineZ } from "./coast.ts";
 
 function hash(x: number, z: number) {
   const n = Math.sin(x * 127.1 + z * 311.7) * 43758.5453123;
@@ -45,7 +46,7 @@ export function terrainHeight(x: number, z: number, kind: LandscapeKind) {
     const lakeDistance = Math.hypot((x - 62) / 42, (z + 82) / 28);
     const lakeBasin = (1 - smoothstep(0.65, 1.2, lakeDistance)) * -5.2;
     const escarpment = Math.pow(Math.max(0, noise(x * 0.009 - 4, z * 0.009 + 8)), 3) * 13;
-    return (broad + middle + detail + lakeBasin + escarpment) * clearing;
+    return coastalHeight(x, z, broad + middle + detail + lakeBasin + escarpment) * clearing;
   }
   // Raise the valley walls; keep the objective clearings at their authored y=0.
   const rim = smoothstep(35, 112, Math.hypot(x * 0.92, z + 22));
@@ -64,7 +65,7 @@ export function regionalFormations(): RegionalFormation[] {
     const z = 44 + (lane * 53 % 145);
     const height = 5 + (lane * 19 % 14);
     return { eastern, x, z, height, rotation: (lane * 2.17) % Math.PI };
-  });
+  }).filter(formation => formation.z < 110); // None on the southern beach or in the sea.
 }
 
 /** Approximate top surface of a rendered formation (its icosahedron is scaled by height * 0.58). */
@@ -86,9 +87,10 @@ export function createScatter(kind: LandscapeKind, count: number, seedOffset = 0
   const random = () => { seed = Math.imul(seed, 1664525) + 1013904223 | 0; return (seed >>> 0) / 4294967296; };
   const size = kind === "ridge" ? 225 : 370;
   const result: Scatter[] = [];
-  for (let i = 0; i < count; i++) {
+  for (let i = 0; i < count * 10 && result.length < count; i++) {
     const x = (random() - 0.5) * size;
     const z = (random() - 0.5) * size;
+    if (kind === "open" && z > shorelineZ(x) - 10) continue;
     result.push({ x, y: terrainHeight(x, z, kind), z, scale: 0.55 + random() * 1.15, rotation: random() * Math.PI });
   }
   return result;
@@ -105,6 +107,7 @@ export function createPlantings(kind: LandscapeKind, type: "tree" | "rock", coun
     const size = kind === "ridge" ? 230 : 380;
     const x = (random() - 0.5) * size;
     const z = kind === "open" && type === "tree" ? random() * 205 - 190 : (random() - 0.5) * size;
+    if (kind === "open" && z > shorelineZ(x) - 8) continue;
     if (type === "tree" && noise(x * 0.035, z * 0.035) < -0.18) continue;
     const exclusion = type === "tree" ? 14 : 5;
     const clearings = kind === "ridge" ? missionClearings : openClearings;

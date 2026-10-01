@@ -100,6 +100,12 @@ To check this revision: sneak to the nearest loot and escape; then sprint across
 
 The WebXR flows were exercised with Meta's IWER emulator (an emulated Quest 3 driven from Playwright): flying with the thumbsticks, grabbing a gem with a reached claw, banking it, and a full first-person scavenger raid. That proves the input wiring and game logic, not comfort, frame rate, or how the claws feel on real hardware.
 
+### First coast
+
+Free flight now has a southern shoreline around world Z=125–160. Fly south from the starting area (toward increasing Z; use the map) to find beach dunes, coastal cliffs, shallow turquoise water, foam and small waves. The ocean extends beyond the current island terrain. Inland beacons and mission arenas remain intact; vegetation avoids the beach/water strip. Terrain and collision still use the same height source. The ocean uses one opaque shader draw, with no reflection render target or water physics.
+
+This is the first surface-water slice. Swimming, underwater castles, a traversable second continent, and marine life are future steps. Browser and Quest visual/performance testing of this coast remain outstanding.
+
 ### Graphics and render stability
 
 Instanced forests, rocks, grass, and mountains now refresh their bounding volumes after placement; cached bounds near the origin could otherwise cull an entire distant batch. Skinned dragon meshes remain visible through wing animations. Wings use a single transparent pass without writing depth, with shared membrane folds; body scales also vary roughness. Curved horns, shaped fins, rounded armor, and eroded ridgelines replace sharper primitive profiles. These are procedural improvements to the existing asset set, not replacement authored character models.

@@ -5,7 +5,7 @@ import * as THREE from "three";
 import type { DragonType } from "../dragons";
 import {
   TREASURES, TREASURE_KINDS, createCommonLoot, resolveTreasureSpot, skyDrift, appraise, emptyTalons, grabWith, releaseFrom,
-  carryLoad, stepLooseLoot, inLake, inHoardZone, hoardFloor, dunkBonus, HOARD_SITE, hoardMoundHeight, talonsNeeded, hoardRank,
+  carryLoad, stepLooseLoot, inLake, inSea, inHoardZone, hoardFloor, dunkBonus, HOARD_SITE, hoardMoundHeight, talonsNeeded, hoardRank,
 } from "../game/loot";
 import type { HoardProgress, TalonSide, Talons, TreasureDef, TreasureKind } from "../game/loot";
 import { terrainHeight } from "../game/landscape";
@@ -383,14 +383,15 @@ export default function LootSystem({ dragon, hoard }: { dragon: DragonType; hoar
           const r = Math.hypot(item.position.x - HOARD_SITE.x, item.position.z - HOARD_SITE.z);
           if (r <= HOARD_SITE.radius && item.position.y <= groundAt(item.position.x, item.position.z) + 0.05) {
             bank(item, item.releaseY - floor);
-          } else if (inLake(item.position)) {
+          } else if (inLake(item.position) || inSea(item.position)) {
+            const water = inLake(item.position) ? "lake" : "sea";
             item.state = "world";
             item.position.copy(item.home);
             item.ignoreUntil = now + 2;
             // Sky treasure goes back up on its lantern rather than hovering bare where it started.
             if (item.def.perch === "sky") { item.onLantern = true; item.lanternFreedAt = -1; }
             missionEmitter.dispatchEvent(new CustomEvent("impact", { detail: { position: { x: item.position.x, y: item.position.y + 1, z: item.position.z }, color: "#a6e4ff", quiet: true } }));
-            lootToast(`Splash! The lake spat the ${item.def.name} back where you found it.`, "info");
+            lootToast(`Splash! The ${water} washed the ${item.def.name} back where you found it.`, "info");
           } else if (next.resting) {
             item.state = "world";
           }

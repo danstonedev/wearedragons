@@ -1,8 +1,9 @@
 import test from "node:test";
+import { SEA_LEVEL, shorelineZ } from "../src/game/coast.ts";
 import assert from "node:assert/strict";
 import {
   TREASURES, TREASURE_KINDS, createCommonLoot, resolveTreasureSpot, skyDrift, regionOf, appraise, TRIBE_TASTES,
-  emptyTalons, grabWith, releaseFrom, carriedIds, talonsNeeded, carryLoad, stepLooseLoot, inLake,
+  emptyTalons, grabWith, releaseFrom, carriedIds, talonsNeeded, carryLoad, stepLooseLoot, inLake, inSea,
   HOARD_SITE, LAKE, hoardFloor, inHoardZone, dunkBonus, emptyHoard, bankLoot, parseHoard, hoardRank, hoardMoundHeight,
 } from "../src/game/loot.ts";
 import { terrainHeight, createPlantings } from "../src/game/landscape.ts";
@@ -129,6 +130,22 @@ test("dropped treasure falls, bounces, and settles in the same spot at any frame
   assert.equal(stepLooseLoot(resting, 1 / 60, ground), resting);
   assert.equal(inLake({ x: LAKE.x + 3, y: LAKE.surface - 1, z: LAKE.z }), true);
   assert.equal(inLake({ x: LAKE.x + 3, y: LAKE.surface + 4, z: LAKE.z }), false);
+  assert.equal(inSea({ x: 0, y: SEA_LEVEL - 2, z: shorelineZ(0) + 20 }), true);
+  assert.equal(inSea({ x: 0, y: SEA_LEVEL + 6, z: shorelineZ(0) + 20 }), false, "still falling above the waves");
+  assert.equal(inSea({ x: 0, y: SEA_LEVEL - 2, z: shorelineZ(0) - 30 }), false, "a dip inland is not the sea");
+});
+
+test("the sea never swallows treasure: ground loot sits ashore, above the waterline", () => {
+  for (const def of [...TREASURES, ...createCommonLoot()]) {
+    const spot = resolveTreasureSpot(def);
+    if (def.perch === "sky") {
+      assert.ok(spot.y > SEA_LEVEL + 10, `${def.id} lantern flies above the sea`);
+      continue;
+    }
+    assert.ok(spot.z < shorelineZ(spot.x) - 6, `${def.id} is in the surf`);
+    // On the beach (the 36-unit coastal blend), sand must stand clear of the waves.
+    if (spot.z > shorelineZ(spot.x) - 36) assert.ok(spot.y > SEA_LEVEL + 1, `${def.id} is under water`);
+  }
 });
 
 test("the hoard nest is level, banks loot in its column, and rewards high dunks", () => {

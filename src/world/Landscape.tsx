@@ -4,6 +4,7 @@ import * as THREE from "three";
 import { createTerrainSurface, terrainHeight } from "../game/landscape";
 import type { LandscapeKind } from "../game/landscape";
 import { renderingBudget } from "../game/rendering";
+import { shorelineZ } from "../game/coast";
 import { device } from "../utils/device";
 
 function groundRelief() {
@@ -42,6 +43,7 @@ function groundColor(x: number, z: number, y: number, kind: LandscapeKind, slope
     : green.clone();
   color.lerp(earth, THREE.MathUtils.clamp((y - 4) / 19, 0, 0.55));
   color.lerp(rock, THREE.MathUtils.clamp((slope - 0.35) * 0.75, 0, 0.75));
+  if (kind === "open") color.lerp(new THREE.Color("#cfb986"), THREE.MathUtils.smoothstep(z - shorelineZ(x), -36, -12));
   const variation = Math.sin(x * 0.57 + z * 0.36) * Math.sin(z * 0.41 - x * 0.2) * 0.04;
   return color.multiplyScalar(1 + variation);
 }

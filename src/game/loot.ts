@@ -1,4 +1,5 @@
 import { createPlantings, formationTop, regionalFormations, terrainHeight } from "./landscape.ts";
+import { SEA_LEVEL, shorelineZ } from "./coast.ts";
 import type { Vector3Like } from "./flight.ts";
 
 export type TreasureKind =
@@ -54,20 +55,20 @@ export const TREASURES: readonly TreasureDef[] = [
   unique("sunburst_scarab", "Sunburst Scarab", "idol", "pantala", 220, 1, "rare", ["gold", "relic"], "spire", [70, 95], "A golden beetle that never stops staring.", "#ffd56b"),
   unique("hive_amber", "Hive Amber", "gem", "pantala", 160, 1, "rare", ["gem", "amber"], "ground", [40, 62], "There's a very surprised bug inside.", "#ffb238"),
   unique("flamesilk_spool", "Flamesilk Spool", "spool", "pantala", 200, 1, "rare", ["silk", "fire"], "sky", [100, 150], "Glows like a sunset someone wound up and saved for later.", "#ffffff", 22),
-  unique("dune_sapphire", "Dune Sapphire", "gem", "pantala", 190, 1, "rare", ["gem"], "ground", [172, 168], "Found where the dunes sing at night.", "#3f7bff"),
+  unique("dune_sapphire", "Dune Sapphire", "gem", "pantala", 190, 1, "rare", ["gem"], "ground", [172, 123], "Found where the dunes sing at night.", "#3f7bff"),
   unique("desert_sun_crown", "Desert Sun Crown", "crown", "pantala", 300, 1, "rare", ["gold", "crown"], "spire", [150, 60], "Seven points, one for each very hot day of the week.", "#ffe08a"),
   unique("rusty_kettle", "The Rusty Kettle", "kettle", "pantala", 5, 1, "junk", ["junk", "scavenger"], "ground", [22, 118], "Priceless, to exactly one scavenger."),
   unique("golden_hourglass", "Golden Hourglass", "hourglass", "pantala", 240, 2, "rare", ["gold", "relic"], "ground", [137, 97], "The sand flows upward when nobody's looking."),
-  unique("sand_queen_strongbox", "Sand Queen's Strongbox", "chest", "pantala", 460, 3, "legendary", ["gold", "chest"], "ground", [60, 182], "Locked, heavy, and absolutely somebody else's.", "#ffe2b0"),
+  unique("sand_queen_strongbox", "Sand Queen's Strongbox", "chest", "pantala", 460, 3, "legendary", ["gold", "chest"], "ground", [60, 134], "Locked, heavy, and absolutely somebody else's.", "#ffe2b0"),
 
   unique("frost_sapphire", "Frost Sapphire", "gem", "glaeryus", 210, 1, "rare", ["gem", "ice"], "spire", [-60, 80], "Leaves frost on your claws. Worth it.", "#a8e6ff"),
-  unique("basalt_idol", "Basalt Idol", "idol", "glaeryus", 170, 2, "rare", ["relic", "stone"], "ground", [-42, 140], "Carved by dragons who really liked carving themselves.", "#8d969c"),
+  unique("basalt_idol", "Basalt Idol", "idol", "glaeryus", 170, 2, "rare", ["relic", "stone"], "ground", [-42, 107], "Carved by dragons who really liked carving themselves.", "#8d969c"),
   unique("glacier_orb", "Glacier Glass Orb", "orb", "glaeryus", 230, 1, "rare", ["ice", "orb"], "sky", [-100, 160], "Look inside and you'll see snow falling. Indoors.", "#bdf3ff", 24),
   unique("starlight_chart", "Starlight Chart", "scroll", "glaeryus", 160, 1, "rare", ["scroll", "sky"], "ground", [-123, 97], "A map of every star. Two are marked 'mine'.", "#c7d4ff"),
   unique("skyfire_shard", "Skyfire Shard", "gem", "glaeryus", 340, 1, "legendary", ["gem", "sky", "fire"], "sky", [-170, 60], "A piece of a falling star. It hums when you hold it.", "#c77dff", 32),
   unique("whistling_bone_harp", "Whistling Bone Harp", "harp", "glaeryus", 130, 1, "rare", ["bone", "relic"], "spire", [-150, 130], "Plays a tune whenever the wind is sad."),
   unique("lucky_boot", "Scavenger's Lucky Boot", "boot", "glaeryus", 3, 1, "junk", ["junk", "scavenger"], "ground", [-22, 62], "Just the left one. The lucky one, presumably."),
-  unique("frozen_king_vault", "Frozen King's Vault", "chest", "glaeryus", 520, 3, "legendary", ["gold", "chest", "ice"], "ground", [-168, 172], "Iced shut for a thousand years. Bring both talons.", "#d8f1ff"),
+  unique("frozen_king_vault", "Frozen King's Vault", "chest", "glaeryus", 520, 3, "legendary", ["gold", "chest", "ice"], "ground", [-168, 133], "Iced shut for a thousand years. Bring both talons.", "#d8f1ff"),
 ];
 
 export const TREASURE_BY_ID: ReadonlyMap<string, TreasureDef> = new Map(TREASURES.map(def => [def.id, def]));
@@ -95,6 +96,8 @@ export function createCommonLoot(count = 30): TreasureDef[] {
     const roll = random();
     const variant = random();
     if (Math.hypot(x - LAKE.x, z - LAKE.z) < LAKE.radius + 5) continue;
+    // Keep clear of the surf: the southern sea would swallow anything on the wet sand.
+    if (z > shorelineZ(x) - 14) continue;
     if (Math.hypot(x - HOARD_SITE.x, z - HOARD_SITE.z) < HOARD_SITE.radius + 8) continue;
     if (BEACONS.some(([bx, bz]) => Math.hypot(x - bx, z - bz) < 9)) continue;
     if (TREASURES.some(def => Math.hypot(x - def.at[0], z - def.at[1]) < 10)) continue;
@@ -250,6 +253,11 @@ export function stepLooseLoot(item: LooseLoot, delta: number, groundAt: (x: numb
 
 export function inLake(position: Vector3Like) {
   return Math.hypot(position.x - LAKE.x, position.z - LAKE.z) < LAKE.radius && position.y <= LAKE.surface + 0.05;
+}
+
+/** Loot that falls past the waterline into the southern sea (the water starts just above the shoreline). */
+export function inSea(position: Vector3Like) {
+  return position.z > shorelineZ(position.x) - 3 && position.y <= SEA_LEVEL + 0.05;
 }
 
 export function hoardFloor() {
