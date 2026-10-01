@@ -6,30 +6,9 @@ import type { LandscapeKind } from "../game/landscape";
 import { renderingBudget } from "../game/rendering";
 import { shorelineZ } from "../game/coast";
 import { device } from "../utils/device";
+import { groundRelief } from "./groundRelief";
 
-function groundRelief() {
-  const size = 128;
-  const data = new Uint8Array(size * size * 4);
-  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
-    const stone = Math.sin(x * 0.51) * Math.cos(y * 0.43) * 14;
-    const grain = Math.sin(x * 2.73 + y * 1.91) * 9;
-    const value = Math.max(0, Math.min(255, 145 + stone + grain));
-    const at = (y * size + x) * 4;
-    data[at] = data[at + 1] = data[at + 2] = value;
-    data[at + 3] = 255;
-  }
-  const texture = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
-  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
-  texture.repeat.set(28, 28);
-  texture.colorSpace = THREE.NoColorSpace;
-  texture.magFilter = THREE.LinearFilter;
-  texture.minFilter = THREE.LinearMipmapLinearFilter;
-  texture.generateMipmaps = true;
-  texture.needsUpdate = true;
-  return texture;
-}
-
-const terrainRelief = groundRelief();
+const terrainRelief = groundRelief(28);
 
 function groundColor(x: number, z: number, y: number, kind: LandscapeKind, slope: number) {
   const green = new THREE.Color("#526e42");

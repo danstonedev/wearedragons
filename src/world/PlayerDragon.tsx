@@ -89,6 +89,22 @@ export default function PlayerDragon({ dragon }: { dragon: DragonType }) {
     controllerRef.current = controller;
     return () => { controllerRef.current = null; world.removeCharacterController(controller); };
   }, [world]);
+  // Respawns (and test tooling) move the dragon instantly, dropping any momentum.
+  useEffect(() => {
+    const teleport = (event: Event) => {
+      const target = (event as CustomEvent<{ x: number; y: number; z: number; heading?: number }>).detail;
+      const body = rbRef.current;
+      if (!body || ![target.x, target.y, target.z].every(Number.isFinite)) return;
+      body.setTranslation(target, true);
+      body.setNextKinematicTranslation(target);
+      Object.assign(playerPos, { x: target.x, y: target.y, z: target.z });
+      Object.assign(desiredVelocity.current, { x: 0, y: 0, z: 0 });
+      Object.assign(actualVelocity.current, { x: 0, y: 0, z: 0 });
+      if (Number.isFinite(target.heading) && visualGroupRef.current) visualGroupRef.current.rotation.y = target.heading!;
+    };
+    missionEmitter.addEventListener("player_teleport", teleport);
+    return () => missionEmitter.removeEventListener("player_teleport", teleport);
+  }, []);
   useBeforePhysicsStep(() => {
     if (gameSession.paused || !rbRef.current || !colliderRef.current || !controllerRef.current) return;
     const result = moveFlightCharacter(controllerRef.current, rbRef.current, colliderRef.current, desiredVelocity.current, world.timestep, rapier.QueryFilterFlags.EXCLUDE_SENSORS);

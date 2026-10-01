@@ -20,6 +20,14 @@ export function renderingBudget(device: string) {
     clouds: constrained ? 8 : 24,
     grass: constrained ? 280 : 750,
     shadowMapSize: 1024,
+    /** Open-world terrain levels of detail: cells per chunk side, and how far each level reaches. */
+    worldLods: constrained
+      ? [{ divisions: 20, distance: 120 }, { divisions: 10, distance: 250 }, { divisions: 5, distance: 450 }]
+      : [{ divisions: 32, distance: 170 }, { divisions: 16, distance: 360 }, { divisions: 8, distance: 580 }, { divisions: 4, distance: 780 }],
+    /** Fog start and end in the open world; the terrain ends just past the fog. */
+    worldFog: constrained ? [110, 440] as const : [170, 720] as const,
+    /** Terrain colliders stream in around the player within this radius. */
+    colliderRadius: constrained ? 100 : 130,
   };
 }
 

@@ -1,5 +1,6 @@
 import { createPlantings, formationTop, regionalFormations, terrainHeight } from "./landscape.ts";
 import { SEA_LEVEL, shorelineZ } from "./coast.ts";
+import { HOME_LAKE } from "./world.ts";
 import type { Vector3Like } from "./flight.ts";
 
 export type TreasureKind =
@@ -79,7 +80,7 @@ export function regionOf(x: number, z: number): LootRegion {
 }
 
 export const HOARD_SITE = { x: 0, z: -13, radius: 7.5, height: 16 } as const;
-export const LAKE = { x: 62, z: -82, radius: 27.5, surface: -1.55 } as const;
+export const LAKE = HOME_LAKE;
 const BEACONS: readonly (readonly [number, number])[] = [[-30, -100], [130, 90], [-130, 90]];
 
 const GEM_TINTS = ["#ff4f6d", "#4fd38a", "#ffcf4f", "#b77dff", "#5fb8ff"];

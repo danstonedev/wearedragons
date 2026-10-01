@@ -9,6 +9,7 @@ import {
 } from "../game/loot";
 import type { HoardProgress, TalonSide, Talons, TreasureDef, TreasureKind } from "../game/loot";
 import { terrainHeight } from "../game/landscape";
+import { kingdomAt } from "../game/world";
 import { clawInput, carryState, gameSession, lootInput, missionEmitter, playerPos, playerStatus, playerVelocity, talonState, xrInput } from "../game/runtime";
 import { renderingBudget } from "../game/rendering";
 import { device } from "../utils/device";
@@ -416,7 +417,7 @@ export default function LootSystem({ dragon, hoard }: { dragon: DragonType; hoar
         for (const item of items) {
           if (item.state !== "world") continue;
           remaining++;
-          lootMap.items.push({ x: item.position.x, z: item.position.z, rarity: item.def.rarity, unique: item.def.unique, region: item.def.region });
+          lootMap.items.push({ x: item.position.x, z: item.position.z, rarity: item.def.rarity, unique: item.def.unique, region: item.def.region, kingdom: kingdomAt(item.position.x, item.position.z).id });
           const distance = Math.hypot(item.position.x - px, item.position.z - pz);
           if (distance < nearestDistance) { nearest = item; nearestDistance = distance; }
         }

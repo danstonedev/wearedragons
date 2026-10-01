@@ -1,5 +1,6 @@
 import { missionEmitter } from "./runtime.ts";
 import type { LootRegion, TreasureRarity } from "./loot.ts";
+import type { KingdomId } from "./world.ts";
 
 export interface CarriedSummary { name: string; value: number; rarity: TreasureRarity; favored: boolean }
 
@@ -16,7 +17,7 @@ export const lootHud = {
 };
 
 /** Treasure still glinting in the world, for the map. */
-export const lootMap = { items: [] as { x: number; z: number; rarity: TreasureRarity; unique: boolean; region: LootRegion }[] };
+export const lootMap = { items: [] as { x: number; z: number; rarity: TreasureRarity; unique: boolean; region: LootRegion; kingdom: KingdomId }[] };
 
 export function lootToast(text: string, tone: "gold" | "info" | "warn" | "legend" = "info") {
   missionEmitter.dispatchEvent(new CustomEvent("loot_toast", { detail: { text, tone } }));
