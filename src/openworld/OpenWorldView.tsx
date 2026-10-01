@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import { Physics } from "@react-three/rapier";
 import * as THREE from "three";
@@ -16,9 +16,11 @@ import type { DragonType } from "../dragons";
 import { abilityState, joy, missionEmitter, pan } from "../game/runtime";
 import { renderingBudget } from "../game/rendering";
 import { useWorldSession } from "../game/useWorldSession";
+import { useWorldSave } from "../game/worldSave";
 import { KINGDOMS, attitudeOf } from "../game/world";
 import type { Kingdom } from "../game/world";
 import type { HoardProgress, TreasureDef } from "../game/loot";
+import { lootToast } from "../game/lootRuntime";
 import { device, isTouchDevice, preset } from "../utils/device";
 import { VRLaunch, VRScene } from "../vr/VRSupport";
 import Atmosphere from "../world/Atmosphere";
@@ -99,7 +101,8 @@ export default function OpenWorldView({ dragon, onSwap, onBack, hoard, onBank, o
   hoardSaveUnavailable: boolean;
 }) {
   const [kingdom, setKingdom] = useState<Kingdom>(KINGDOMS[0]);
-  const [discovered, setDiscovered] = useState<ReadonlySet<string>>(() => new Set());
+  const { save: worldSave, light: lightBeacon } = useWorldSave();
+  const discovered = useMemo<ReadonlySet<string>>(() => new Set(worldSave.beacons), [worldSave]);
   const [banner, setBanner] = useState<{ kingdom: Kingdom; key: number } | null>(null);
   const [showMap, setShowMap] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -137,13 +140,6 @@ export default function OpenWorldView({ dragon, onSwap, onBack, hoard, onBank, o
     setBanner(previous => ({ kingdom: next, key: (previous?.key ?? 0) + 1 }));
   }, []);
 
-  const lightBeacon = useCallback((id: string) => {
-    setDiscovered(previous => {
-      if (previous.has(id)) return previous;
-      return new Set(previous).add(id);
-    });
-  }, []);
-
   return (
     <div tabIndex={0} style={{ width: "100vw", height: "100vh", overflow: "hidden", outline: "none", touchAction: "none" }}>
       <SceneBoundary>
@@ -162,7 +158,10 @@ export default function OpenWorldView({ dragon, onSwap, onBack, hoard, onBank, o
             <Windways />
             <WorldDetails kind="open" />
             <Vegetation kind="open" />
-            {KINGDOMS.map(item => <WorldBeacon key={item.id} kingdom={item} discovered={discovered.has(item.id)} onDiscovered={() => lightBeacon(item.id)} />)}
+            {KINGDOMS.map(item => <WorldBeacon key={item.id} kingdom={item} discovered={discovered.has(item.id)} onDiscovered={() => {
+              lightBeacon(item.id);
+              lootToast(`✦ The ${item.name} beacon is lit! Its treasure now shows on your map (M).`, "legend");
+            }} />)}
             <PlayerDragon dragon={dragon} />
             <LootSystem dragon={dragon} hoard={hoard} />
             <Projectiles />

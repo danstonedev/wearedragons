@@ -14,3 +14,6 @@ export const rivalHud = {
 export function resetRivalHud() {
   Object.assign(rivalHud, { chasing: 0, warning: 0, nearest: null, alarm: null });
 }
+
+/** Free-flight health, for displays that cannot read React state (the VR status panel). */
+export const vitalityHud = { hp: 100, max: 100, knockedOut: false };

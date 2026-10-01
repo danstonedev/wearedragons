@@ -191,6 +191,16 @@
   gap: 14px;
 }
 
+.ledger-heading {
+  margin: 18px 0 10px;
+  font: 700 15px "Cinzel", Georgia, serif;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #ffd98a;
+}
+.ledger-kingdoms { grid-template-columns: repeat(4, 1fr); }
+.ledger-owed { color: #ffb0a0; }
+
 .ledger-columns h3 {
   margin: 0 0 8px;
   font: 700 11px "Inter", sans-serif;
@@ -244,7 +254,11 @@ html:not([data-device="desktop"]) .loot-panel {
   width: 220px;
 }
 
+@media (max-width: 960px) {
+  .ledger-kingdoms { grid-template-columns: repeat(2, 1fr); }
+}
+
 @media (max-width: 760px) {
-  .ledger-columns { grid-template-columns: 1fr; }
+  .ledger-columns, .ledger-kingdoms { grid-template-columns: 1fr; }
   .ow-ledger-btn { left: 24px; bottom: 64px; }
 }

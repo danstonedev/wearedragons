@@ -4,6 +4,7 @@ import { HOARD_SITE } from "../game/loot";
 import { lootToast } from "../game/lootRuntime";
 import { gameSession, missionEmitter, playerStatus } from "../game/runtime";
 import { createVitality, damageVitality, regenerateVitality, reviveVitality } from "../game/vitality";
+import { vitalityHud } from "../game/rivalRuntime";
 
 /** How long the screen stays dark before you wake up beside your hoard. */
 const KNOCKOUT_SECONDS = 1.8;
@@ -20,6 +21,7 @@ export function useVitality(dragon: DragonType) {
   const [hurt, setHurt] = useState(0);
   const [knockedOut, setKnockedOut] = useState(false);
   useEffect(() => { armor.current = dragon.stats.armor; }, [dragon.stats.armor]);
+  useEffect(() => { Object.assign(vitalityHud, { hp: state.hp, max: state.max, knockedOut }); }, [state, knockedOut]);
 
   useEffect(() => {
     let wake = 0;
