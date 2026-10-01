@@ -45,7 +45,7 @@ The GitHub Pages workflow runs these checks before publishing a push to `main`.
 
 For Quest, open an HTTPS build in a WebXR-capable browser, choose a dragon and a mission or free flight, then select **Enter VR**. The button appears only when immersive VR is supported and its runtime has loaded; the **?** beside it expands the controls. Inside the headset a controls card shows for about ten seconds (and whenever you pause), then fades so it never blocks the view; a small status panel sits low and to the left. Mission selection and results currently use the browser page outside VR. Hand tracking is not supported.
 
-In free flight, VR grips do double duty. With a relaxed hand, the left grip brakes and the right grip glides. Reaching out turns that hand's grip into a claw: squeeze on treasure, or sweep a closed, outstretched claw through it, and the dragon's talon grabs it while the sticks keep flying. Two-talon chests need both claws.
+In free flight, VR grips do double duty. With a relaxed hand, the left grip brakes and the right grip glides. Reaching out turns that hand's grip into a claw: squeeze on treasure, or sweep a closed, outstretched claw through it, and the dragon's talon grabs it while the sticks keep flying. Two-talon chests need both claws. A held grip never brakes or glides, and the left stick keeps its speed. Only opening your hand drops treasure; a brief loss of controller tracking does not. The relaxed hand pose follows the way your body faces, so turning in the room does not count as reaching.
 
 ### Scavengers controls
 
@@ -58,6 +58,7 @@ In free flight, VR grips do double duty. With a relaxed hand, the left grip brak
 | Steal nearby loot | E | GRAB | Grip with a hand near the loot (or reach low) |
 | Throw a pebble | Q (where the camera faces) | PEBBLE | Right trigger (where your hand points) |
 | Drop the last item | X | DROP | A |
+| Raid again after a result | RAID AGAIN | RAID AGAIN | A |
 | Pause / exit VR | Escape | Pause button | X / Y |
 
 The headset camera follows position and yaw without copying the dragon's pitch or bank. Initial settings cap flight speed in VR and favor a 72 Hz session where available; these are starting values, not a verified comfort or performance rating.
@@ -88,11 +89,12 @@ You are a human from the Burrows. Three lairs add one rule at a time: a heavy sl
 - **Snores:** a loud snore masks quiet steps. Each prize sits near a sleeping snout, so stealing it silently means grabbing during a snore. Light sleepers hear it anyway.
 - **Sight:** vision cones (drawn on the floor) reach much further into braziers and sunlight, and pillars block line of sight.
 - **Pebbles:** a thrown pebble always sends an awake dragon to look where it landed.
-- **Dragon states:** dragons stir (eyes open, head turns), investigate, chase, search, and return. A chase ends when you break line of sight long enough, or when the dragon catches you.
+- **Dragon states:** dragons stir (eyes open, head turns), investigate, chase, search, and return. A chase ends when you break line of sight long enough, or when the dragon catches you. A dragon that cannot reach a spot past the pillars gives up after a couple of seconds and searches from where it is.
+- **VR footsteps:** walking in your room moves the scavenger and makes footsteps too. Crouch-walk to keep them quiet.
 
 Escape down the burrow with loot to score stars; records, prize steals, and "ghost" raids (never spotted) are saved.
 
-To check this revision: sneak to the nearest loot and escape; then sprint across a coin pile beside a sleeping dragon and confirm it wakes. In Sunscorch Vault, throw a pebble behind the patrolling guard and slip past while it investigates. In VR, crouch to sneak, reach down to grab, and throw with the trigger.
+To check this revision: sneak to the nearest loot and escape; then sprint across a coin pile beside a sleeping dragon and confirm it wakes. In Sunscorch Vault, throw a pebble behind the patrolling guard and slip past while it investigates. In VR, crouch to sneak, reach down to grab, and throw with the trigger. After the raid, the result card appears in the headset; press A to raid again.
 
 ### Testing VR without a headset
 

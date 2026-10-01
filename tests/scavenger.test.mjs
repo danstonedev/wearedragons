@@ -213,3 +213,22 @@ test("each prize is a timing puzzle: silent during a loud snore, heard between s
     assert.ok(breathing.suspicion >= 30, `${lair.id}: grabbing between snores stirs the dragon`);
   }
 });
+
+test("a dragon walled off by a pillar gives up instead of pushing against it forever", () => {
+  // The pillar sits dead ahead on the straight line to the noise, so the dragon wedges against it.
+  const wall = [{ x: 0, z: 8, r: 4 }];
+  const def = vault.dragons[1];
+  const away = (state, i) => ({ player: { x: 0, z: -24 }, sneaking: true, light: 0.2, noises: [], pillars: wall });
+  const guard = { ...createDragonState(def), x: 0, z: -2, yaw: 0, mode: "investigate", suspicion: 70, target: { x: 0, z: 14 } };
+  const stuck = runDragon(def, guard, away, { ...vault, pillars: wall }, 9);
+  assert.notEqual(stuck.state.mode, "investigate", "it searches where it got stuck, then heads back");
+  assert.ok(!stuck.events.includes("caught"));
+  // A sleeper that cannot get home curls up where it stands.
+  const sleeper = { ...den.dragons[0], x: 0, z: 9, yaw: 0 };
+  const block = [{ x: 0, z: 1, r: 3 }];
+  const returning = { ...createDragonState(sleeper), x: 0, z: -6.5, yaw: 0, mode: "returning", suspicion: 10 };
+  const dozed = runDragon(sleeper, returning, (state, i) => ({ ...away(state, i), pillars: block }), { ...den, pillars: block }, 6);
+  assert.equal(dozed.state.mode, "asleep");
+  assert.ok(dozed.events.includes("settle"));
+  assert.ok(Math.hypot(dozed.state.x - sleeper.x, dozed.state.z - sleeper.z) > 5, "it slept in place rather than reaching home");
+});

@@ -142,7 +142,7 @@ export default function RaidWorld({ raid, onEnd }: { raid: RaidState; onEnd: (ou
     }
     if (gameSession.paused) return;
     const lair = raid.lair;
-    raid.noises = [];
+    // Noises queued since the last step (VR grabs, drops, and real footsteps) are heard now, with this step's.
 
     // Camera-relative movement from keys, arrows, or the touch stick.
     const turn = (raidKeys.arrowleft ? 1 : 0) - (raidKeys.arrowright ? 1 : 0);
@@ -192,6 +192,7 @@ export default function RaidWorld({ raid, onEnd }: { raid: RaidState; onEnd: (ou
       lastSnore.current[i] = snoring;
       return next.state;
     });
+    raid.noises = [];
 
     if (caughtBy) {
       raid.catcher = caughtBy;

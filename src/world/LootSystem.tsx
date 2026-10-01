@@ -287,12 +287,14 @@ export default function LootSystem({ dragon, hoard }: { dragon: DragonType; hoar
     // VR: each controller steers one talon; squeeze near treasure to grab, release to drop or throw.
     for (const side of ["left", "right"] as const) {
       const hand = clawInput[side];
-      if (hand.grip && !lastGrip.current[side]) pressAt.current[side] = now;
+      const wasGripping = lastGrip.current[side];
+      if (hand.grip && !wasGripping) pressAt.current[side] = now;
       lastGrip.current[side] = hand.grip;
       const holding = talons.current[side];
       if (holding) {
         hand.near = false;
-        if (!hand.grip || !hand.tracked) {
+        // Only opening the hand lets go: a tracking blip keeps the treasure on the talon's rest point.
+        if (wasGripping && !hand.grip) {
           const other = side === "left" ? clawInput.right : clawInput.left;
           const both = talons.current.left === talons.current.right;
           const velocity = both ? { x: (hand.velocity.x + other.velocity.x) / 2, y: (hand.velocity.y + other.velocity.y) / 2, z: (hand.velocity.z + other.velocity.z) / 2 } : hand.velocity;
@@ -326,7 +328,8 @@ export default function LootSystem({ dragon, hoard }: { dragon: DragonType; hoar
       }
       if (snatch(best, side)) hand.busy = true;
     }
-    if (clawInput.left.busy) xrInput.brake = false;
+    // A grip that holds treasure is a claw, not the brake or glide, and the left stick still sets the speed.
+    if (clawInput.left.busy) { xrInput.brake = false; xrInput.throttle = xrInput.stickThrottle; }
     if (clawInput.right.busy) xrInput.glide = false;
   }, -1);
 
@@ -384,6 +387,8 @@ export default function LootSystem({ dragon, hoard }: { dragon: DragonType; hoar
             item.state = "world";
             item.position.copy(item.home);
             item.ignoreUntil = now + 2;
+            // Sky treasure goes back up on its lantern rather than hovering bare where it started.
+            if (item.def.perch === "sky") { item.onLantern = true; item.lanternFreedAt = -1; }
             missionEmitter.dispatchEvent(new CustomEvent("impact", { detail: { position: { x: item.position.x, y: item.position.y + 1, z: item.position.z }, color: "#a6e4ff", quiet: true } }));
             lootToast(`Splash! The lake spat the ${item.def.name} back where you found it.`, "info");
           } else if (next.resting) {

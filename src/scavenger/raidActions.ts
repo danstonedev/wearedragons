@@ -41,8 +41,9 @@ export function grabLoot(raid: RaidState, item: LairLoot | null = reachableLoot(
 }
 
 export function dropLoot(raid: RaidState) {
+  if (raid.ended) return false;
   const id = raid.sack.pop();
-  if (!id || raid.ended) return false;
+  if (!id) return false;
   const item = raid.lair.loot.find(loot => loot.id === id)!;
   const angle = raid.player.facing;
   const spot = { x: raid.player.x + Math.sin(angle) * 0.7, z: raid.player.z + Math.cos(angle) * 0.7 };

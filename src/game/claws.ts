@@ -38,14 +38,17 @@ export function talonAnchor(side: ClawSide, body: Vector3Like, yaw: number): Vec
 /**
  * World-space talon offset for a tracked hand. Hand and head are in XR origin space, whose
  * axes follow the dragon's yaw, so the offset is rotated by the same yaw into the world.
+ * The relaxed pose turns with the head (headYaw, origin space), so a player who turns their
+ * body still has relaxed hands; the reach itself keeps world-consistent directions.
  */
-export function clawReach(side: ClawSide, hand: Vector3Like, head: Vector3Like, yaw: number): Vector3Like {
-  const values = [hand.x, hand.y, hand.z, head.x, head.y, head.z, yaw];
+export function clawReach(side: ClawSide, hand: Vector3Like, head: Vector3Like, yaw: number, headYaw = 0): Vector3Like {
+  const values = [hand.x, hand.y, hand.z, head.x, head.y, head.z, yaw, headYaw];
   if (!values.every(Number.isFinite)) return { x: 0, y: 0, z: 0 };
   const sign = side === "left" ? -1 : 1;
-  let x = hand.x - (head.x + sign * CLAW_REACH.neutral.side);
+  const relaxed = rotateY({ x: sign * CLAW_REACH.neutral.side, y: 0, z: -CLAW_REACH.neutral.forward }, headYaw);
+  let x = hand.x - (head.x + relaxed.x);
   let y = hand.y - (head.y - CLAW_REACH.neutral.down);
-  let z = hand.z - (head.z - CLAW_REACH.neutral.forward);
+  let z = hand.z - (head.z + relaxed.z);
   const length = Math.hypot(x, y, z);
   if (length <= CLAW_REACH.deadzone) return { x: 0, y: 0, z: 0 };
   const travel = Math.min(CLAW_REACH.maxReach, (length - CLAW_REACH.deadzone) * CLAW_REACH.gain);

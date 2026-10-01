@@ -352,6 +352,10 @@ export interface LairDragonState extends Spot {
   /** Seconds into the snore cycle. */
   snore: number;
   sees: boolean;
+  /** The spot the dragon is walking toward, its closest approach, and how long it has made no headway. */
+  progressGoal: Spot | null;
+  progress: number;
+  stall: number;
 }
 export type DragonEvent = "stir" | "wake" | "spot" | "lost" | "settle" | "caught";
 
@@ -362,6 +366,7 @@ export function createDragonState(def: LairDragonDef): LairDragonState {
   return {
     id: def.id, x: def.x, z: def.z, yaw: def.yaw, look: 0, suspicion: 0, timer: 0, target: null, routeIndex: 0, lastSeen: null, unseen: 0,
     mode: def.role === "sleeper" ? "asleep" : "patrol", snore: def.x * 0.31 + def.z * 0.17, sees: false,
+    progressGoal: null, progress: 0, stall: 0,
   };
 }
 
@@ -427,10 +432,35 @@ function travel(state: LairDragonState, target: Spot, speed: number, dt: number,
   return distance < 1.2;
 }
 
+/** Seconds without closing in before a dragon gives up on a spot that pillars keep it from reaching. */
+const STALL_SECONDS = 2;
+
+/** Travel, but report "stalled" instead of pushing against a pillar forever. */
+function travelOrGiveUp(state: LairDragonState, target: Spot, speed: number, dt: number, lair: LairDef): "arrived" | "moving" | "stalled" {
+  const goal = state.progressGoal;
+  // A new destination (not just a noise a step away from the last one) gets a fresh attempt.
+  if (!goal || Math.hypot(goal.x - target.x, goal.z - target.z) > 2) {
+    state.progressGoal = { x: target.x, z: target.z };
+    state.progress = Math.hypot(target.x - state.x, target.z - state.z);
+    state.stall = 0;
+  }
+  if (state.stall > STALL_SECONDS) return "stalled";
+  if (travel(state, target, speed, dt, lair)) return "arrived";
+  const distance = Math.hypot(target.x - state.x, target.z - state.z);
+  if (distance < state.progress - 0.25) { state.progress = distance; state.stall = 0; }
+  else state.stall += dt;
+  return "moving";
+}
+
 /** One deterministic AI step: hearing, sight, suspicion, then movement. */
 export function stepLairDragon(def: LairDragonDef, previous: LairDragonState, context: SenseContext, lair: LairDef, delta: number) {
   const dt = Math.max(0, Math.min(delta, 1 / 15));
-  const state: LairDragonState = { ...previous, target: previous.target ? { ...previous.target } : null, lastSeen: previous.lastSeen ? { ...previous.lastSeen } : null };
+  const state: LairDragonState = {
+    ...previous,
+    target: previous.target ? { ...previous.target } : null,
+    lastSeen: previous.lastSeen ? { ...previous.lastSeen } : null,
+    progressGoal: previous.progressGoal ? { ...previous.progressGoal } : null,
+  };
   const events: DragonEvent[] = [];
   const head = dragonHead(state);
   state.snore += dt;
@@ -493,20 +523,22 @@ export function stepLairDragon(def: LairDragonDef, previous: LairDragonState, co
       if (state.suspicion >= 40 && alerted) { state.mode = "investigate"; state.timer = 0; state.target = alerted; events.push("stir"); break; }
       const waypoint = routeTarget(def, state.routeIndex);
       if (state.target === null) {
-        if (travel(state, waypoint, def.speed * 0.8, dt, lair)) { state.target = waypoint; state.timer = 0; }
+        const step = travelOrGiveUp(state, waypoint, def.speed * 0.8, dt, lair);
+        if (step === "arrived") { state.target = waypoint; state.timer = 0; }
+        else if (step === "stalled") { state.routeIndex++; state.progressGoal = null; state.timer = 0; }
         state.look += (0 - state.look) * (1 - Math.exp(-4 * dt));
       } else {
         // Pause at each waypoint and scan the room.
         state.look = Math.sin(state.timer * 1.4) * 0.9;
-        if (state.timer > 1.8) { state.routeIndex++; state.target = null; state.timer = 0; }
+        if (state.timer > 1.8) { state.routeIndex++; state.target = null; state.progressGoal = null; state.timer = 0; }
       }
       break;
     }
     case "investigate": {
       if (heard) state.target = heard;
       const destination = state.target ?? state.lastSeen;
-      if (destination && Math.hypot(destination.x - state.x, destination.z - state.z) > DRAGON_BODY_RADIUS + 1.6) {
-        travel(state, destination, def.speed, dt, lair);
+      if (destination && Math.hypot(destination.x - state.x, destination.z - state.z) > DRAGON_BODY_RADIUS + 1.6
+        && travelOrGiveUp(state, destination, def.speed, dt, lair) === "moving") {
         state.look *= Math.exp(-3 * dt);
         state.timer = 0;
       } else {
@@ -524,10 +556,13 @@ export function stepLairDragon(def: LairDragonDef, previous: LairDragonState, co
       break;
     }
     case "search": {
-      const destination = state.target;
-      if (destination && Math.hypot(destination.x - state.x, destination.z - state.z) > 2) { travel(state, destination, def.speed, dt, lair); state.timer = 0; }
-      else state.look = Math.sin(state.timer * 2.1) * 1.2;
       if (heard) state.target = heard;
+      const destination = state.target;
+      // The dragon's bulk stops it short of where the scavenger stood; close enough is close enough.
+      const arrive = DRAGON_BODY_RADIUS + SCAVENGER.radius + 0.6;
+      if (destination && Math.hypot(destination.x - state.x, destination.z - state.z) > arrive
+        && travelOrGiveUp(state, destination, def.speed, dt, lair) === "moving") state.timer = 0;
+      else state.look = Math.sin(state.timer * 2.1) * 1.2;
       if (state.timer > 5) { state.mode = "returning"; state.timer = 0; state.target = null; }
       break;
     }
@@ -535,7 +570,11 @@ export function stepLairDragon(def: LairDragonDef, previous: LairDragonState, co
       if (state.suspicion >= 55 && alerted) { state.mode = "investigate"; state.timer = 0; state.target = alerted; break; }
       const home = def.role === "sleeper" ? { x: def.x, z: def.z } : routeTarget(def, state.routeIndex);
       state.look *= Math.exp(-3 * dt);
-      if (travel(state, home, def.speed * 0.9, dt, lair)) {
+      const step = travelOrGiveUp(state, home, def.speed * 0.9, dt, lair);
+      if (step === "stalled") {
+        if (def.role === "sleeper") { state.mode = "asleep"; state.timer = 0; state.suspicion = Math.min(state.suspicion, 20); events.push("settle"); }
+        else { state.mode = "patrol"; state.routeIndex++; state.target = null; state.timer = 0; }
+      } else if (step === "arrived") {
         if (def.role === "sleeper") {
           const turn = angleDifference(def.yaw, state.yaw);
           state.yaw += Math.sign(turn) * Math.min(Math.abs(turn), 2 * dt);
@@ -545,6 +584,8 @@ export function stepLairDragon(def: LairDragonDef, previous: LairDragonState, co
       break;
     }
   }
+
+  if (state.mode !== previous.mode) { state.progressGoal = null; state.stall = 0; }
 
   if (state.mode !== "asleep") {
     const reach = dragonHead(state);

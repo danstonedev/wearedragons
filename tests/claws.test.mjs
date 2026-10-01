@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { CLAW_REACH, FOOT_REST, clawReach, rotateY, talonAnchor } from "../src/game/claws.ts";
-import { clawInput, resetInput } from "../src/game/runtime.ts";
+import { clawInput, resetInput, xrInput } from "../src/game/runtime.ts";
+import { readXRControls } from "../src/controls/xrControls.ts";
 
 const head = { x: 0.1, y: 1.6, z: 0.05 };
 const neutral = side => ({ x: head.x + (side === "left" ? -1 : 1) * CLAW_REACH.neutral.side, y: head.y - CLAW_REACH.neutral.down, z: head.z - CLAW_REACH.neutral.forward });
@@ -50,4 +51,23 @@ test("leaving VR or pausing releases both claw grips", () => {
   clawInput.left.grip = clawInput.right.grip = true;
   resetInput();
   assert.equal(clawInput.left.grip || clawInput.right.grip, false);
+});
+
+test("a player who turns their body still has relaxed hands, and VR carries keep the throttle", () => {
+  const turn = Math.PI / 2;
+  // Relaxed hands in front of a head turned 90 degrees in the room.
+  for (const side of ["left", "right"]) {
+    const sign = side === "left" ? -1 : 1;
+    const relaxed = rotateY({ x: sign * CLAW_REACH.neutral.side, y: 0, z: -CLAW_REACH.neutral.forward }, turn);
+    const hand = { x: head.x + relaxed.x, y: head.y - CLAW_REACH.neutral.down, z: head.z + relaxed.z };
+    assert.deepEqual(clawReach(side, hand, head, 0.4, turn), { x: 0, y: 0, z: 0 });
+    assert.ok(Math.hypot(...Object.values(clawReach(side, hand, head, 0.4, 0))) > 0.9, "ignoring the head turn would read as reaching");
+  }
+  const pad = { mapping: "xr-standard", axes: [0, 0, 0, -1], buttons: [{ pressed: false }, { pressed: true }] };
+  const input = readXRControls([{ handedness: "left", gamepad: pad }]);
+  assert.equal(input.throttle, 0, "the brake grip still stops a relaxed hand");
+  assert.equal(input.stickThrottle, 1, "a busy claw can restore the stick's throttle");
+  xrInput.stickThrottle = 1;
+  resetInput();
+  assert.equal(xrInput.stickThrottle, 0);
 });

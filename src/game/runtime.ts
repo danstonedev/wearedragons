@@ -9,7 +9,7 @@ export const playerStatus = { cloaked: false, invulnerable: false, heading: 0, f
 export const aim = { origin: { x: 0, y: 6.2, z: -3 }, direction: { x: 0, y: 0, z: -1 } };
 export const combatFeedback = { hitAt: -999, destroyedAt: -999 };
 export const gameSession = { paused: false, elapsed: 0, ready: false };
-export const xrInput = { throttle: 0, climb: 0, fire: false, special: false, snapYaw: 0, glide: false, brake: false };
+export const xrInput = { throttle: 0, stickThrottle: 0, climb: 0, fire: false, special: false, snapYaw: 0, glide: false, brake: false };
 /** World positions of the dragon's hind claws, refreshed by the player every frame. */
 export const talonState = { left: { x: 0, y: 4.6, z: 0.2 }, right: { x: 0, y: 4.6, z: 0.2 }, ready: false };
 export const playerVelocity = { x: 0, y: 0, z: 0 };
@@ -45,7 +45,7 @@ export function resetInput() {
   for (const key of Object.keys(keys)) delete keys[key];
   Object.assign(joy.left, { x: 0, y: 0 });
   Object.assign(joy, { throttle: 0, fire: false, special: false, glide: false, brake: false });
-  Object.assign(xrInput, { throttle: 0, climb: 0, fire: false, special: false, snapYaw: 0, glide: false, brake: false });
+  Object.assign(xrInput, { throttle: 0, stickThrottle: 0, climb: 0, fire: false, special: false, snapYaw: 0, glide: false, brake: false });
   Object.assign(pan, { yaw: 0, pitch: 0, active: 0 });
   lootInput.drop = false;
   clawInput.left.grip = clawInput.right.grip = false;

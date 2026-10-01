@@ -6,8 +6,9 @@ import { xrStore } from "./xrStore";
 import { readXRControls, controllerEdges } from "../controls/xrControls";
 import { gameSession, missionEmitter, playerPos, playerStatus, xrInput, abilityState, resetInput, clawInput } from "../game/runtime";
 import { damping } from "../game/flight";
+import { angleDifference } from "../game/scavenger";
 import type { MissionRuntimeState, MissionDefinition } from "../game/missions";
-import { clawReach, talonAnchor } from "../game/claws";
+import { clawReach, rotateY, talonAnchor } from "../game/claws";
 import type { ClawSide } from "../game/claws";
 import { lootHud } from "../game/lootRuntime";
 import DragonClaw from "../world/DragonClaw";
@@ -78,11 +79,14 @@ export function VRFlightRig({ mission, missionState, claws }: VRSceneProps) {
   const helpUntil = useRef(0);
   const helpPressed = useRef(false);
   const headPosition = useRef(new THREE.Vector3(0, 1.4, 0));
+  // Which way the player's body faces in the room: the head's yaw, smoothed so a glance is not a turn.
+  const bodyYaw = useRef<number | null>(null);
+  const scratch = useMemo(() => ({ forward: new THREE.Vector3(), quaternion: new THREE.Quaternion() }), []);
   const helpMesh = useRef<THREE.Mesh>(null);
   const statusMesh = useRef<THREE.Mesh>(null);
   const hands = useRef({
-    left: { position: new THREE.Vector3(), orientation: new THREE.Quaternion(), reach: { x: 0, y: 0, z: 0 }, near: false },
-    right: { position: new THREE.Vector3(), orientation: new THREE.Quaternion(), reach: { x: 0, y: 0, z: 0 }, near: false },
+    left: { position: new THREE.Vector3(), orientation: new THREE.Quaternion(), reach: { x: 0, y: 0, z: 0 }, velocity: { x: 0, y: 0, z: 0 }, near: false },
+    right: { position: new THREE.Vector3(), orientation: new THREE.Quaternion(), reach: { x: 0, y: 0, z: 0 }, velocity: { x: 0, y: 0, z: 0 }, near: false },
   });
   const handGroups = { left: useRef<THREE.Group>(null), right: useRef<THREE.Group>(null) };
   const panels = useMemo(() => {
@@ -101,6 +105,7 @@ export function VRFlightRig({ mission, missionState, claws }: VRSceneProps) {
     if (!session) return;
     previous.current = { special: false, snap: false, pause: false, exit: false };
     helpUntil.current = performance.now() / 1000 + 10;
+    bodyYaw.current = null;
     resetInput();
     const visibility = () => {
       resetInput();
@@ -131,6 +136,7 @@ export function VRFlightRig({ mission, missionState, claws }: VRSceneProps) {
     if (edges.exit) void session.end().catch(() => {});
     const enabled = session.visibilityState === "visible" && !gameSession.paused;
     xrInput.throttle = enabled ? controls.throttle : 0;
+    xrInput.stickThrottle = enabled ? controls.stickThrottle : 0;
     xrInput.climb = enabled ? controls.climb : 0;
     xrInput.fire = enabled && controls.fire;
     xrInput.glide = enabled && controls.glide;
@@ -145,7 +151,16 @@ export function VRFlightRig({ mission, missionState, claws }: VRSceneProps) {
 
     // Each hand steers one hind talon; the sticks keep flying the dragon.
     const viewer = frame && referenceSpace ? frame.getViewerPose(referenceSpace) : undefined;
-    if (viewer) headPosition.current.set(viewer.transform.position.x, viewer.transform.position.y, viewer.transform.position.z);
+    if (viewer) {
+      const { position, orientation } = viewer.transform;
+      headPosition.current.set(position.x, position.y, position.z);
+      const forward = scratch.forward.set(0, 0, -1).applyQuaternion(scratch.quaternion.set(orientation.x, orientation.y, orientation.z, orientation.w));
+      // Looking straight up or down says nothing about where the body faces.
+      if (Math.hypot(forward.x, forward.z) > 0.3) {
+        const headYaw = Math.atan2(-forward.x, -forward.z);
+        bodyYaw.current = bodyYaw.current === null ? headYaw : bodyYaw.current + angleDifference(headYaw, bodyYaw.current) * damping(1.2, delta);
+      }
+    }
     const head = claws && enabled ? viewer?.transform.position : undefined;
     let tracked = false;
     for (const side of ["left", "right"] as const) {
@@ -154,20 +169,28 @@ export function VRFlightRig({ mission, missionState, claws }: VRSceneProps) {
       const source = sources.find(item => item.handedness === side && item.gripSpace);
       const pose = head && source?.gripSpace && referenceSpace ? frame?.getPose(source.gripSpace, referenceSpace) : undefined;
       hand.tracked = Boolean(pose);
-      hand.grip = hand.tracked && Boolean(source?.gamepad?.buttons[1]?.pressed);
-      if (!pose || !head) { Object.assign(hand.velocity, { x: 0, y: 0, z: 0 }); continue; }
+      // The grip follows the button even through a tracking dropout, so held treasure is only let go on purpose.
+      hand.grip = Boolean(claws) && enabled && Boolean(source?.gamepad?.buttons[1]?.pressed);
+      if (!pose || !head) {
+        Object.assign(hand.velocity, { x: 0, y: 0, z: 0 });
+        Object.assign(state.velocity, { x: 0, y: 0, z: 0 });
+        continue;
+      }
       tracked = true;
       const { position, orientation } = pose.transform;
       state.position.set(position.x, position.y, position.z);
       state.orientation.set(orientation.x, orientation.y, orientation.z, orientation.w);
-      const reach = clawReach(side, position, head, playerStatus.heading);
+      // Reach is measured in the dragon's own frame, so turning the dragon is not a flick of the claw.
+      const local = clawReach(side, position, head, 0, bodyYaw.current ?? 0);
       // Throw velocity is the claw's motion relative to the dragon; the dragon's own velocity is added on release.
       const k = damping(20, delta);
       const dt = Math.max(delta, 1 / 120);
-      hand.velocity.x += ((reach.x - state.reach.x) / dt - hand.velocity.x) * k;
-      hand.velocity.y += ((reach.y - state.reach.y) / dt - hand.velocity.y) * k;
-      hand.velocity.z += ((reach.z - state.reach.z) / dt - hand.velocity.z) * k;
-      state.reach = reach;
+      state.velocity.x += ((local.x - state.reach.x) / dt - state.velocity.x) * k;
+      state.velocity.y += ((local.y - state.reach.y) / dt - state.velocity.y) * k;
+      state.velocity.z += ((local.z - state.reach.z) / dt - state.velocity.z) * k;
+      state.reach = local;
+      Object.assign(hand.velocity, rotateY(state.velocity, playerStatus.heading));
+      const reach = rotateY(local, playerStatus.heading);
       const anchor = talonAnchor(side, playerPos, playerStatus.heading);
       Object.assign(hand.target, { x: anchor.x + reach.x, y: anchor.y + reach.y, z: anchor.z + reach.z });
       if (hand.near && !state.near) pulse(session, side, 0.15, 25);

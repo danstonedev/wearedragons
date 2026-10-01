@@ -4,12 +4,12 @@ import { XROrigin, useXR } from "@react-three/xr";
 import * as THREE from "three";
 import { deadzone } from "../controls/xrControls";
 import { gameSession, missionEmitter } from "../game/runtime";
-import { DRAGON_BODY_RADIUS, SCAVENGER, floorHeight, resolveCollisions } from "../game/scavenger";
+import { DRAGON_BODY_RADIUS, SCAVENGER, floorHeight, footstepRadius, raidStars, resolveCollisions, surfaceAt } from "../game/scavenger";
 import type { LairLoot } from "../game/scavenger";
 import { treasureCenter } from "../world/treasureModels";
-import { raidCamera, raidEmitter, raidHud, raidTouch, resetRaidInput } from "../scavenger/raidState";
+import { raidCamera, raidCue, raidEmitter, raidHud, raidTouch, resetRaidInput } from "../scavenger/raidState";
 import type { RaidCue, RaidState } from "../scavenger/raidState";
-import { dropLoot, grabLoot, throwPebble } from "../scavenger/raidActions";
+import { dropLoot, grabLoot, sackWeight, throwPebble } from "../scavenger/raidActions";
 
 type ClawSide = "left" | "right";
 type HapticPad = Gamepad & { hapticActuators?: readonly { pulse?: (value: number, duration: number) => unknown }[] };
@@ -26,6 +26,8 @@ function pulse(session: XRSession, side: ClawSide | "both", intensity: number, m
 
 const STATUS_COLORS = { hidden: "#8fe3a8", exposed: "#ffd27a", seen: "#ffa040", hunted: "#ff5a46" } as const;
 const MODE_TEXT: Record<string, string> = { asleep: "Zz", stirring: "?", patrol: "watching", investigate: "?!", chase: "CHASING", search: "searching", returning: "settling" };
+/** Seconds after a raid ends before the headset shows the result (matches the page's result card). */
+const RESULT_DELAY = 1.7;
 
 /**
  * First-person raid at human scale. The stick walks where you look, real crouching sneaks,
@@ -56,12 +58,26 @@ export function VRScavengerRig({ raid }: { raid: RaidState }) {
     return { canvas, texture, context: canvas.getContext("2d")! };
   }, []);
   const panelTimer = useRef(0);
+  // Real steps in the room are footsteps too: crouch-walk to keep them quiet.
+  const roomStride = useRef(0);
+  const endedFor = useRef(0);
+  const result = useMemo(() => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 1024; canvas.height = 420;
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    return { canvas, texture, context: canvas.getContext("2d")!, drawn: null as RaidState["ended"] };
+  }, []);
+  const resultMesh = useRef<THREE.Mesh>(null);
   useEffect(() => () => panel.texture.dispose(), [panel]);
+  useEffect(() => () => result.texture.dispose(), [result]);
 
   useEffect(() => {
     if (!session) return;
     resetRaidInput();
     lastHead.current = null;
+    roomStride.current = 0;
+    endedFor.current = 0;
     yaw.current = raid.player.facing + Math.PI;
     const visibility = () => {
       resetRaidInput();
@@ -124,15 +140,29 @@ export function VRScavengerRig({ raid }: { raid: RaidState }) {
     const viewer = frame && referenceSpace ? frame.getViewerPose(referenceSpace) : undefined;
     const head = viewer?.transform.position;
     const view = viewer?.transform.orientation;
+    if (edge("sneak")) manualSneak.current = !manualSneak.current;
+    if (head) standing.current = Math.max(standing.current * (1 - 0.02 * delta), head.y, 1.1);
+    // Crouching for real sneaks, so a crouched step this frame is already a quiet one.
+    const crouched = Boolean(head && head.y < standing.current * 0.72);
+    raidTouch.sneak = crouched || manualSneak.current;
     if (head && view) {
-      standing.current = Math.max(standing.current * (1 - 0.02 * delta), head.y, 1.1);
       // Real-world steps move the scavenger too, but never through pillars or dragons.
       if (lastHead.current && active) {
         const dx = head.x - lastHead.current.x, dz = head.z - lastHead.current.z;
         const cos = Math.cos(yaw.current), sin = Math.sin(yaw.current);
         const solids = [...raid.lair.pillars, ...raid.dragons.map(dragon => ({ x: dragon.x, z: dragon.z, r: DRAGON_BODY_RADIUS }))];
         const moved = resolveCollisions(raid.player.x + dx * cos + dz * sin, raid.player.z - dx * sin + dz * cos, SCAVENGER.radius, solids, raid.lair.radius);
+        const stepped = Math.hypot(moved.x - raid.player.x, moved.z - raid.player.z);
         raid.player = { ...raid.player, x: moved.x, z: moved.z };
+        // Leaning and tracking jitter are not steps; walking is.
+        if (stepped > 0.3 * Math.max(delta, 1 / 120)) roomStride.current += stepped;
+        const gait = raidTouch.sneak ? "sneak" : "walk";
+        if (roomStride.current >= (gait === "sneak" ? 0.7 : 0.9)) {
+          roomStride.current = 0;
+          const radius = footstepRadius(gait, sackWeight(raid), surfaceAt(raid.lair, moved.x, moved.z));
+          raid.noises.push({ x: moved.x, z: moved.z, radius, kind: "step" });
+          raidCue("step", { gait, radius });
+        }
       }
       lastHead.current = { x: head.x, z: head.z };
       scratch.forward.set(0, 0, -1).applyQuaternion(scratch.quat.set(view.x, view.y, view.z, view.w));
@@ -140,9 +170,6 @@ export function VRScavengerRig({ raid }: { raid: RaidState }) {
     }
 
     if (edge("snap") && active) yaw.current -= Math.sign(right?.axes[2] ?? 0) * Math.PI / 4;
-    if (edge("sneak")) manualSneak.current = !manualSneak.current;
-    const crouched = Boolean(head && head.y < standing.current * 0.72);
-    raidTouch.sneak = crouched || manualSneak.current;
     raidTouch.x = active ? deadzone(left?.axes[2] ?? 0) : 0;
     raidTouch.y = active ? deadzone(left?.axes[3] ?? 0) : 0;
     raidTouch.sprint = active && pressed(left, 3);
@@ -174,6 +201,10 @@ export function VRScavengerRig({ raid }: { raid: RaidState }) {
       throwPebble(raid, yaw.current + Math.atan2(scratch.forward.x, scratch.forward.z));
     }
     if (active && edge("drop")) dropLoot(raid);
+    // After a raid, the headset shows the result; A starts the next raid.
+    endedFor.current = raid.ended ? endedFor.current + delta : 0;
+    const showResult = Boolean(raid.ended) && endedFor.current > RESULT_DELAY;
+    if (showResult && edge("drop")) missionEmitter.dispatchEvent(new Event("raid_retry"));
     previous.current = now;
 
     for (const [group, state] of [[leftHand.current, hands.current.left], [rightHand.current, hands.current.right]] as const) {
@@ -184,6 +215,18 @@ export function VRScavengerRig({ raid }: { raid: RaidState }) {
       group.scale.set(1, state.grip ? 0.75 : 1, 1);
     }
 
+    if (resultMesh.current) {
+      resultMesh.current.visible = showResult;
+      if (showResult && head && view) {
+        // Float the card in front of the face, level, wherever the player looks.
+        const fx = scratch.forward.set(0, 0, -1).applyQuaternion(scratch.quat.set(view.x, view.y, view.z, view.w)).x, fz = scratch.forward.z;
+        const length = Math.hypot(fx, fz) || 1;
+        resultMesh.current.position.set(head.x + fx / length * 1.5, head.y - 0.1, head.z + fz / length * 1.5);
+        resultMesh.current.rotation.set(0, Math.atan2(-fx, -fz), 0);
+      }
+    }
+    if (showResult && result.drawn !== raid.ended && raid.ended) drawResult(raid.ended);
+
     panelTimer.current -= delta;
     if (panelTimer.current > 0) return;
     panelTimer.current = 0.15;
@@ -192,6 +235,17 @@ export function VRScavengerRig({ raid }: { raid: RaidState }) {
     ctx.fillStyle = "rgba(14, 10, 5, 0.9)";
     ctx.fillRect(0, 0, 512, 320);
     ctx.textAlign = "center";
+    if (raid.ended) {
+      ctx.fillStyle = raid.ended.escaped ? "#ffd27a" : "#ff5a46";
+      ctx.font = "bold 58px sans-serif";
+      ctx.fillText(raid.ended.escaped ? "ESCAPED!" : "CAUGHT!", 256, 110);
+      ctx.fillStyle = "#e9dcc4";
+      ctx.font = "30px sans-serif";
+      ctx.fillText(raid.ended.escaped ? `${raid.ended.value} gold stolen` : "Your sack is lost", 256, 175);
+      ctx.fillText("A: raid again · Y: exit VR", 256, 240);
+      panel.texture.needsUpdate = true;
+      return;
+    }
     ctx.fillStyle = STATUS_COLORS[raidHud.status];
     ctx.font = "bold 58px sans-serif";
     ctx.fillText(gameSession.paused ? "PAUSED" : raidHud.status.toUpperCase(), 256, 70);
@@ -209,8 +263,46 @@ export function VRScavengerRig({ raid }: { raid: RaidState }) {
     panel.texture.needsUpdate = true;
   }, -2);
 
+  function drawResult(outcome: NonNullable<RaidState["ended"]>) {
+    result.drawn = outcome;
+    const ctx = result.context;
+    const stars = outcome.escaped ? raidStars(raid.lair, outcome.value) : 0;
+    const catcher = outcome.caughtBy ? raid.lair.dragons.find(dragon => dragon.id === outcome.caughtBy)?.name : null;
+    ctx.clearRect(0, 0, 1024, 420);
+    ctx.fillStyle = "rgba(14, 10, 5, 0.92)";
+    ctx.beginPath(); ctx.roundRect(0, 0, 1024, 420, 40); ctx.fill();
+    ctx.textAlign = "center";
+    ctx.fillStyle = outcome.escaped ? "#ffd27a" : "#ff6655";
+    ctx.font = "bold 84px sans-serif";
+    ctx.fillText(outcome.escaped ? "ESCAPED!" : "CAUGHT!", 512, 105);
+    ctx.fillStyle = "#e9dcc4";
+    ctx.font = "bold 40px sans-serif";
+    ctx.fillText(raid.lair.name, 512, 165);
+    ctx.font = "36px sans-serif";
+    if (outcome.escaped) {
+      ctx.fillStyle = "#ffd27a";
+      ctx.font = "bold 64px sans-serif";
+      ctx.fillText("★".repeat(stars) + "☆".repeat(3 - stars), 512, 245);
+      ctx.fillStyle = "#e9dcc4";
+      ctx.font = "36px sans-serif";
+      const badges = [outcome.prize ? "★ prize stolen" : "", outcome.ghost ? "ghost: never spotted" : ""].filter(Boolean).join(" · ");
+      ctx.fillText(`${outcome.value} gold${badges ? ` · ${badges}` : ""}`, 512, 305, 960);
+    } else {
+      ctx.fillText(`${catcher ?? "A dragon"} flung you back down the burrow.`, 512, 245, 960);
+      ctx.fillText("Sneak during the snores and keep to the shadows.", 512, 300, 960);
+    }
+    ctx.fillStyle = "#8fe3a8";
+    ctx.font = "bold 38px sans-serif";
+    ctx.fillText(outcome.escaped ? "A: RAID AGAIN · Y: EXIT VR" : "A: TRY AGAIN · Y: EXIT VR", 512, 380);
+    result.texture.needsUpdate = true;
+  }
+
   if (!session) return null;
   return <XROrigin ref={origin}>
+    <mesh ref={resultMesh} visible={false} renderOrder={20}>
+      <planeGeometry args={[1.2, 0.49]} />
+      <meshBasicMaterial map={result.texture} transparent depthTest={false} toneMapped={false} />
+    </mesh>
     {/* Eyes adjusted to the dark: a soft fill around you that dragons cannot see. */}
     <pointLight position={[0, 2.2, -0.6]} color="#9fb0d0" intensity={2.6} distance={8} decay={1.4} />
     <group ref={leftHand} visible={false}>

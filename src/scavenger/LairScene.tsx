@@ -58,7 +58,10 @@ function roughen(geometry: THREE.BufferGeometry, amount: number, seed: number) {
   return geometry;
 }
 
-function LightSource({ light, region, index, exit }: { light: LairLight; region: LairDef["region"]; index: number; exit: boolean }) {
+/** Constrained GPUs pay for every point light on every lit pixel, so they get the brightest few. */
+const CONSTRAINED_POINT_LIGHTS = 3;
+
+function LightSource({ light, region, index, exit, lit }: { light: LairLight; region: LairDef["region"]; index: number; exit: boolean; lit: boolean }) {
   const lamp = useRef<THREE.PointLight>(null);
   const flame = useRef<THREE.Mesh>(null);
   const budget = renderingBudget(device);
@@ -70,7 +73,7 @@ function LightSource({ light, region, index, exit }: { light: LairLight; region:
   });
   const sun = region === "pantala" && !exit;
   return <group position={[light.x, 0, light.z]}>
-    <pointLight ref={lamp} position={[0, sun ? 6 : 2.4, 0]} color={light.color} distance={light.r * 2.4} decay={1.4} />
+    {lit && <pointLight ref={lamp} position={[0, sun ? 6 : 2.4, 0]} color={light.color} distance={light.r * 2.4} decay={1.4} />}
     {/* The lit floor is the danger zone: dragons see you much further in it. */}
     <mesh position={[0, 0.03, 0]} rotation={[-Math.PI / 2, 0, 0]} renderOrder={1}>
       <circleGeometry args={[light.r, 40]} />
@@ -214,6 +217,10 @@ export default function LairScene({ lair }: { lair: LairDef }) {
   }, [lair, ceilingSpikes, domeHeight]);
 
   const nearExit = (light: LairLight) => Math.hypot(light.x - lair.exit.x, light.z - lair.exit.z) < 4;
+  const litLights = useMemo(() => {
+    const ranked = lair.lights.map((light, i) => ({ i, intensity: light.intensity })).sort((a, b) => b.intensity - a.intensity);
+    return new Set(ranked.slice(0, renderingBudget(device).constrained ? CONSTRAINED_POINT_LIGHTS : ranked.length).map(item => item.i));
+  }, [lair]);
   return <>
     <color attach="background" args={[lair.palette.fog]} />
     <fog attach="fog" args={[lair.palette.fog, 16, 62]} />
@@ -234,7 +241,7 @@ export default function LairScene({ lair }: { lair: LairDef }) {
     <GoldPile x={lair.hoard.x} z={lair.hoard.z} r={lair.hoard.r} height={floorHeight(lair, lair.hoard.x, lair.hoard.z)} coins={170} seed={1} />
     {lair.coins.map((pile, i) => <GoldPile key={i} x={pile.x} z={pile.z} r={pile.r} height={0.35} coins={26} seed={i + 4} />)}
     {lair.bones.map((pile, i) => <BonePile key={i} x={pile.x} z={pile.z} r={pile.r} seed={i * 3.7} />)}
-    {lair.lights.map((light, i) => <LightSource key={i} light={light} region={lair.region} index={i} exit={nearExit(light)} />)}
+    {lair.lights.map((light, i) => <LightSource key={i} light={light} region={lair.region} index={i} exit={nearExit(light)} lit={litLights.has(i)} />)}
     <Burrow lair={lair} />
   </>;
 }

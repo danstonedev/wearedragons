@@ -9,14 +9,16 @@ export function deadzone(value: number, threshold = 0.18) {
 }
 
 export function readXRControls(sources: readonly XRControllerSample[]) {
-  const input = { throttle: 0, climb: 0, fire: false, special: false, snap: 0, pause: false, exit: false, brake: false, glide: false };
+  // stickThrottle ignores the brake grip, so a claw holding treasure can keep flying.
+  const input = { throttle: 0, stickThrottle: 0, climb: 0, fire: false, special: false, snap: 0, pause: false, exit: false, brake: false, glide: false };
   for (const source of sources) {
     const pad = source.gamepad;
     // Only the documented xr-standard layout is supported; don't guess other layouts.
     if (!pad || pad.mapping !== "xr-standard") continue;
     if (source.handedness === "left") {
       input.brake = pad.buttons[1]?.pressed ?? false;
-      input.throttle = pad.buttons[1]?.pressed ? 0 : -deadzone(pad.axes[3] ?? 0);
+      input.stickThrottle = -deadzone(pad.axes[3] ?? 0);
+      input.throttle = pad.buttons[1]?.pressed ? 0 : input.stickThrottle;
       input.special = pad.buttons[0]?.pressed ?? false;
       input.pause = pad.buttons[4]?.pressed ?? false;
       input.exit = pad.buttons[5]?.pressed ?? false;
