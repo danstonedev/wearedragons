@@ -4,12 +4,14 @@ import { BallCollider, RigidBody } from "@react-three/rapier";
 import * as THREE from "three";
 import type { DragonType } from "../dragons";
 import {
-  ALL_TREASURES, TREASURE_KINDS, createCommonLoot, resolveTreasureSpot, skyDrift, appraise, emptyTalons, grabWith, releaseFrom,
-  carryLoad, stepLooseLoot, inLake, inSea, inHoardZone, hoardFloor, dunkBonus, HOARD_SITE, hoardMoundHeight, talonsNeeded, hoardRank,
+  ALL_TREASURES, TREASURE_KINDS, createCommonLoot, createWildLoot, resolveTreasureSpot, skyDrift, appraise, emptyTalons, grabWith, releaseFrom,
+  carryLoad, stepLooseLoot, inLake, inSea, inLava, inlandSplash, restingSurface, inHoardZone, hoardFloor, dunkBonus, HOARD_SITE, hoardMoundHeight,
+  talonsNeeded, hoardRank,
 } from "../game/loot";
 import type { HoardProgress, TalonSide, Talons, TreasureDef, TreasureKind } from "../game/loot";
 import { terrainHeight } from "../game/landscape";
-import { kingdomAt } from "../game/world";
+import { SCAVENGER_CAMPS, kingdomAt } from "../game/world";
+import { campLayouts } from "../game/scavengerCamps";
 import { clawInput, carryState, gameSession, lootInput, missionEmitter, playerPos, playerStatus, playerVelocity, talonState, xrInput } from "../game/runtime";
 import { renderingBudget } from "../game/rendering";
 import { device } from "../utils/device";
@@ -31,6 +33,8 @@ interface LootItem {
   side: TalonSide | "both" | null;
   /** Rival dragon or scavenger holding it (state "held"). */
   holder: string | null;
+  /** Lying loose on open ground, where a scavenger could walk up and take it. */
+  grounded: boolean;
   /** Dangling center while carried. */
   hang: THREE.Vector3;
   hangPrev: THREE.Vector3;
@@ -75,19 +79,48 @@ function headingTo(dx: number, dz: number) {
   return relative;
 }
 
-function createItems(banked: HoardProgress["banked"]): LootItem[] {
+/** Sacks of your own gold that scavengers carry off; spare ones wait, hidden, until a raid fills one. */
+const SACK_POOL = 10;
+const sackDef = (i: number): TreasureDef => ({
+  id: `gold_sack_${i}`, name: "Sack of Your Gold", kind: "sack", region: "pyrrhia", value: 0, weight: 1, rarity: "rare", tags: ["gold"],
+  tint: "#ffffff", lore: "Your own gold, in a scavenger's sack. Take it home.", unique: false, perch: "ground", at: [0, 0],
+});
+const isSpareSack = (item: LootItem) => item.def.kind === "sack" && item.state === "banked";
+
+/** Fill a spare sack with gold owed by a camp; it rests in (or returns to) that camp's stash. */
+function fillSack(item: LootItem, campId: string, amount: number) {
+  const camp = SCAVENGER_CAMPS.findIndex(site => site.id === campId);
+  const stash = campLayouts()[Math.max(0, camp)].stash;
+  item.def = { ...item.def, value: amount, stolenFrom: campId, name: `Sack of Your Gold (${amount})` };
+  item.home.set(stash.x + Math.sin(item.phase) * 1.6, stash.y, stash.z + Math.cos(item.phase) * 1.6);
+  item.grounded = true;
+}
+
+function createItems(banked: HoardProgress["banked"], stolen: HoardProgress["stolen"]): LootItem[] {
   let slot = 0;
-  return [...ALL_TREASURES, ...createCommonLoot()].map((def, index) => {
-    const spot = resolveTreasureSpot(def);
-    const isBanked = def.unique && Boolean(banked[def.id]);
+  const defs = [...ALL_TREASURES, ...createCommonLoot(), ...createWildLoot(), ...Array.from({ length: SACK_POOL }, (_, i) => sackDef(i))];
+  const items = defs.map((def, index) => {
+    const spare = def.kind === "sack";
+    const spot = spare ? { x: 0, y: -50, z: 0 } : resolveTreasureSpot(def);
+    const isBanked = spare || (def.unique && Boolean(banked[def.id]));
     const home = new THREE.Vector3(spot.x, spot.y, spot.z);
     return {
       def, home, position: home.clone(), velocity: new THREE.Vector3(), state: isBanked ? "banked" : "world", side: null, holder: null,
+      grounded: def.perch === "ground" && !isBanked,
       hang: new THREE.Vector3(), hangPrev: new THREE.Vector3(), anchor: new THREE.Vector3(), releaseY: 0, ignoreUntil: 0,
-      onLantern: def.perch === "sky" && !isBanked, lanternFreedAt: -1, slot: isBanked ? slot++ : -1,
+      onLantern: def.perch === "sky" && !isBanked, lanternFreedAt: -1, slot: spare ? -1 : isBanked ? slot++ : -1,
       phase: index * 1.37, scale: def.kind === "chest" ? 1.15 : 1.35, center: treasureCenter(def.kind),
     } satisfies LootItem;
   });
+  // Gold scavengers got away with on earlier flights waits in their camps' stashes.
+  for (const [campId, amount] of Object.entries(stolen)) {
+    const item = items.find(isSpareSack);
+    if (!item || !(amount > 0)) continue;
+    fillSack(item, campId, amount);
+    item.state = "world";
+    item.position.copy(item.home);
+  }
+  return items;
 }
 
 function summary(item: LootItem, dragonId: string): CarriedSummary {
@@ -97,7 +130,7 @@ function summary(item: LootItem, dragonId: string): CarriedSummary {
 
 export default function LootSystem({ dragon, hoard }: { dragon: DragonType; hoard: HoardProgress }) {
   // The world layout is fixed for this flight; the persistent hoard only decides what has already been taken.
-  const [items] = useState(() => createItems(hoard.banked));
+  const [items] = useState(() => createItems(hoard.banked, hoard.stolen));
   const talons = useRef<Talons>(emptyTalons());
   const nextSlot = useRef(items.reduce((max, item) => Math.max(max, item.slot + 1), 0));
   const hints = useRef(new Map<string, number>());
@@ -163,6 +196,7 @@ export default function LootSystem({ dragon, hoard }: { dragon: DragonType; hoar
       item.state = "falling";
       item.side = null;
       item.holder = null;
+      item.grounded = false;
       item.position.copy(item.hang);
       item.position.y -= item.center * item.scale;
       item.velocity.set(velocity.x, velocity.y, velocity.z);
@@ -192,16 +226,32 @@ export default function LootSystem({ dragon, hoard }: { dragon: DragonType; hoar
       }
     };
     const stash = (event: Event) => {
-      const { holder, spot } = (event as CustomEvent<{ holder: string; spot: { x: number; y: number; z: number } }>).detail;
+      const { holder, spot, grounded = false } = (event as CustomEvent<{ holder: string; spot: { x: number; y: number; z: number }; grounded?: boolean }>).detail;
       let n = 0;
       for (const item of items) {
         if (item.state !== "held" || item.holder !== holder) continue;
         const angle = item.phase + n++ * 2.4;
         item.state = "world";
         item.holder = null;
+        item.grounded = grounded;
         item.position.set(spot.x + Math.cos(angle) * 1.8, spot.y, spot.z + Math.sin(angle) * 1.8);
+        item.position.y = restingSurface(item.position.x, item.position.z);
         item.ignoreUntil = gameSession.elapsed + 1;
       }
+    };
+    // A raider scoops your gold into a sack and slings it on its back.
+    const sack = (event: Event) => {
+      const detail = (event as CustomEvent<{ holder: string; amount: number; camp: string; result: string | null }>).detail;
+      const source = lootHolders.get(detail.holder);
+      const item = items.find(isSpareSack);
+      if (!item || !source || !(detail.amount > 0)) return;
+      fillSack(item, detail.camp, detail.amount);
+      item.state = "held";
+      item.holder = detail.holder;
+      item.side = null;
+      item.hang.set(source.x, source.y - 0.2, source.z);
+      item.hangPrev.copy(item.hang);
+      detail.result = item.def.id;
     };
     const claim = (event: Event) => {
       const detail = (event as CustomEvent<{ holder: string; itemId: string; result: boolean }>).detail;
@@ -209,6 +259,7 @@ export default function LootSystem({ dragon, hoard }: { dragon: DragonType; hoar
       if (!item || item.state !== "world" || item.onLantern || gameSession.elapsed < item.ignoreUntil) return;
       item.state = "held";
       item.holder = detail.holder;
+      item.grounded = false;
       item.hang.copy(item.position);
       item.hang.y += item.center * item.scale;
       item.hangPrev.copy(item.hang);
@@ -223,7 +274,9 @@ export default function LootSystem({ dragon, hoard }: { dragon: DragonType; hoar
         letGo(item, { x: playerVelocity.x * 0.5, y: 2, z: playerVelocity.z * 0.5 }, 2);
       }
     };
-    const events: [string, (event: Event) => void][] = [["loot_steal", steal], ["loot_holder_drop", drop], ["loot_holder_stash", stash], ["loot_claim", claim], ["player_knockout", knockout]];
+    const events: [string, (event: Event) => void][] = [
+      ["loot_steal", steal], ["loot_holder_drop", drop], ["loot_holder_stash", stash], ["loot_claim", claim], ["loot_sack", sack], ["player_knockout", knockout],
+    ];
     events.forEach(([name, handler]) => missionEmitter.addEventListener(name, handler));
     return () => events.forEach(([name, handler]) => missionEmitter.removeEventListener(name, handler));
   }, [items]);
@@ -278,6 +331,7 @@ export default function LootSystem({ dragon, hoard }: { dragon: DragonType; hoar
     item.anchor.copy(item.hang);
     item.state = "carried";
     item.side = grab.side;
+    item.grounded = false;
     if (item.onLantern) { item.onLantern = false; item.lanternFreedAt = gameSession.elapsed; }
     const appraisal = appraise(item.def, dragonRef.current.id);
     missionEmitter.dispatchEvent(new CustomEvent("loot_snatched", { detail: { id: item.def.id, side: grab.side } }));
@@ -291,7 +345,7 @@ export default function LootSystem({ dragon, hoard }: { dragon: DragonType; hoar
 
   const bank = (item: LootItem, dunkHeight?: number) => {
     const appraisal = appraise(item.def, dragonRef.current.id);
-    const bonus = dunkHeight === undefined ? 1 : dunkBonus(dunkHeight);
+    const bonus = dunkHeight === undefined || item.def.stolenFrom ? 1 : dunkBonus(dunkHeight);
     const value = Math.round(appraisal.value * bonus);
     if (item.state === "carried" && item.side) {
       talons.current = releaseFrom(talons.current, item.side === "both" ? "left" : item.side).talons;
@@ -300,7 +354,10 @@ export default function LootSystem({ dragon, hoard }: { dragon: DragonType; hoar
     item.side = null;
     item.slot = item.def.unique ? nextSlot.current++ : -1;
     missionEmitter.dispatchEvent(new CustomEvent("loot_banked", { detail: { id: item.def.id, def: item.def, value, dragonId: dragonRef.current.id } }));
-    lootToast(bonus > 1 ? `HOARD DUNK ×${bonus} · +${value} gold` : `HOARDED ${item.def.name} · +${value} gold`, item.def.rarity === "legendary" ? "legend" : "gold");
+    if (item.def.stolenFrom) {
+      const camp = SCAVENGER_CAMPS.find(site => site.id === item.def.stolenFrom);
+      lootToast(`WON BACK ${value} gold from ${camp?.name ?? "the scavengers"}!`, "gold");
+    } else lootToast(bonus > 1 ? `HOARD DUNK ×${bonus} · +${value} gold` : `HOARDED ${item.def.name} · +${value} gold`, item.def.rarity === "legendary" ? "legend" : "gold");
   };
 
   const release = (side: TalonSide, throwVelocity?: { x: number; y: number; z: number }) => {
@@ -311,6 +368,7 @@ export default function LootSystem({ dragon, hoard }: { dragon: DragonType; hoar
     if (!item) return;
     item.state = "falling";
     item.side = null;
+    item.grounded = false;
     item.position.copy(item.hang);
     item.position.y -= item.center * item.scale;
     item.velocity.set(
@@ -324,9 +382,8 @@ export default function LootSystem({ dragon, hoard }: { dragon: DragonType; hoar
   };
 
   const groundAt = (x: number, z: number) => {
-    const ground = terrainHeight(x, z, "open");
     const r = Math.hypot(x - HOARD_SITE.x, z - HOARD_SITE.z);
-    return ground + moundSurface(r, hoardMoundHeight(goldRef.current));
+    return restingSurface(x, z) + moundSurface(r, hoardMoundHeight(goldRef.current));
   };
 
   // Input and grabbing run before the flight model, so a busy claw does not also brake or glide.
@@ -433,6 +490,7 @@ export default function LootSystem({ dragon, hoard }: { dragon: DragonType; hoar
             if (!holder) {
               item.state = "falling";
               item.holder = null;
+              item.grounded = false;
               item.position.copy(item.hang);
               item.position.y -= item.center * item.scale;
               item.velocity.set(0, 0, 0);
@@ -440,8 +498,9 @@ export default function LootSystem({ dragon, hoard }: { dragon: DragonType; hoar
               item.ignoreUntil = now + 0.5;
               continue;
             }
-            anchor.set(holder.x, holder.y + (holder.carry === "back" ? 1.0 : -1.4), holder.z);
-            if (holder.carry === "back") length = 0.2;
+            // A scavenger's holder point is already on its back.
+            anchor.set(holder.x, holder.y + (holder.carry === "back" ? 0 : -1.4), holder.z);
+            if (holder.carry === "back") length = 0.15;
           } else if (side === "both") {
             const a = clawInput.active && clawInput.left.tracked ? clawInput.left.target : talonState.left;
             const b = clawInput.active && clawInput.right.tracked ? clawInput.right.target : talonState.right;
@@ -477,17 +536,20 @@ export default function LootSystem({ dragon, hoard }: { dragon: DragonType; hoar
           const r = Math.hypot(item.position.x - HOARD_SITE.x, item.position.z - HOARD_SITE.z);
           if (r <= HOARD_SITE.radius && item.position.y <= groundAt(item.position.x, item.position.z) + 0.05) {
             bank(item, item.releaseY - floor);
-          } else if (inLake(item.position) || inSea(item.position)) {
-            const water = inLake(item.position) ? "lake" : "sea";
+          } else if (inLake(item.position) || inSea(item.position) || inLava(item.position) || inlandSplash(item.position)) {
+            const lava = inLava(item.position);
+            const water = inLake(item.position) ? "lake" : inSea(item.position) ? "sea" : inlandSplash(item.position) === "mud" ? "mud" : "water";
             item.state = "world";
             item.position.copy(item.home);
+            item.grounded = item.def.perch === "ground";
             item.ignoreUntil = now + 2;
             // Sky treasure goes back up on its lantern rather than hovering bare where it started.
             if (item.def.perch === "sky") { item.onLantern = true; item.lanternFreedAt = -1; }
-            missionEmitter.dispatchEvent(new CustomEvent("impact", { detail: { position: { x: item.position.x, y: item.position.y + 1, z: item.position.z }, color: "#a6e4ff", quiet: true } }));
-            lootToast(`Splash! The ${water} washed the ${item.def.name} back where you found it.`, "info");
+            missionEmitter.dispatchEvent(new CustomEvent("impact", { detail: { position: { x: item.position.x, y: item.position.y + 1, z: item.position.z }, color: lava ? "#ff7a2a" : "#a6e4ff", quiet: true } }));
+            lootToast(lava ? `Sizzle! The lava spat the ${item.def.name} back where you found it.` : `Splash! The ${water} washed the ${item.def.name} back where you found it.`, "info");
           } else if (next.resting) {
             item.state = "world";
+            item.grounded = true;
           }
         }
       }
@@ -510,7 +572,11 @@ export default function LootSystem({ dragon, hoard }: { dragon: DragonType; hoar
         for (const item of items) {
           if (item.state !== "world") continue;
           remaining++;
-          lootMap.items.push({ x: item.position.x, z: item.position.z, rarity: item.def.rarity, unique: item.def.unique, region: item.def.region, kingdom: kingdomAt(item.position.x, item.position.z).id });
+          lootMap.items.push({
+            id: item.def.id, name: item.def.name, x: item.position.x, y: item.position.y, z: item.position.z, grounded: item.grounded && !item.onLantern,
+            rarity: item.def.rarity, unique: item.def.unique, region: item.def.region, kingdom: kingdomAt(item.position.x, item.position.z).id,
+            sack: Boolean(item.def.stolenFrom),
+          });
           const distance = Math.hypot(item.position.x - px, item.position.z - pz);
           if (distance < nearestDistance) { nearest = item; nearestDistance = distance; }
         }

@@ -75,6 +75,32 @@ export default function FlightAudio() {
       oscillator.onended = () => { oscillator.disconnect(); filter.disconnect(); gain.disconnect(); };
     };
     const hurt = () => pulse(105, 0.18, 0.22);
+    // Scavengers: a startled yelp, the raiders' horn, and a ballista's twang.
+    const scavenger = (event: Event) => {
+      const kind = (event as CustomEvent<{ kind: string }>).detail?.kind;
+      if (kind === "yelp") { chime(620, 0.06, 0.12); chime(930, 0.05, 0.14, 0.07); }
+      if (kind === "twang") { pulse(240, 0.1, 0.12); pulse(95, 0.12, 0.3); }
+      if (kind === "horn") {
+        const audio = rig.current;
+        if (!audio || gameSession.paused || audio.context.state !== "running" || audio.master.gain.value === 0) return;
+        for (const offset of [0, 0.7]) {
+          const start = audio.context.currentTime + offset;
+          const oscillator = audio.context.createOscillator();
+          const filter = audio.context.createBiquadFilter();
+          const gain = audio.context.createGain();
+          oscillator.type = "sawtooth";
+          oscillator.frequency.setValueAtTime(196, start);
+          oscillator.frequency.linearRampToValueAtTime(185, start + 0.55);
+          filter.type = "lowpass"; filter.frequency.value = 900;
+          gain.gain.setValueAtTime(0.0001, start);
+          gain.gain.linearRampToValueAtTime(0.08, start + 0.08);
+          gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.6);
+          oscillator.connect(filter).connect(gain).connect(audio.master);
+          oscillator.start(start); oscillator.stop(start + 0.65);
+          oscillator.onended = () => { oscillator.disconnect(); filter.disconnect(); gain.disconnect(); };
+        }
+      }
+    };
     fireballEmitter.addEventListener("shoot", shot);
     missionEmitter.addEventListener("impact", impact);
     missionEmitter.addEventListener("loot_snatched", snatched);
@@ -82,6 +108,7 @@ export default function FlightAudio() {
     missionEmitter.addEventListener("loot_dropped", dropped);
     missionEmitter.addEventListener("rival_roar", roar);
     missionEmitter.addEventListener("player_hit", hurt);
+    missionEmitter.addEventListener("scav_sound", scavenger);
     const timer = window.setInterval(() => {
       const audio = rig.current;
       if (!audio || audio.context.state !== "running") return;
@@ -110,6 +137,7 @@ export default function FlightAudio() {
       missionEmitter.removeEventListener("loot_dropped", dropped);
       missionEmitter.removeEventListener("rival_roar", roar);
       missionEmitter.removeEventListener("player_hit", hurt);
+      missionEmitter.removeEventListener("scav_sound", scavenger);
       const audio = rig.current;
       rig.current = null;
       if (audio) void audio.context.close().catch(() => {});

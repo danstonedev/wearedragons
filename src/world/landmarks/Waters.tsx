@@ -154,7 +154,7 @@ export function GreatFalls() {
   return <Distant x={GREAT_FALLS.x} z={GREAT_FALLS.z} range={820}>
     <mesh geometry={sheet} material={fallsMaterial} renderOrder={3} />
     <mesh geometry={river} material={waterMaterial} />
-    <mesh position={[pool.x, 4.6, pool.z]} rotation={[-Math.PI / 2, 0, 0]} material={waterMaterial}>
+    <mesh position={[pool.x, pool.level, pool.z]} rotation={[-Math.PI / 2, 0, 0]} material={waterMaterial}>
       <circleGeometry args={[pool.radius - 2, 40]} />
     </mesh>
     <instancedMesh ref={mist} args={[undefined, undefined, MIST]} frustumCulled={false} renderOrder={4}>

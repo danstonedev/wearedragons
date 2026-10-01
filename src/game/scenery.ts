@@ -3,7 +3,8 @@ import { terrainHeight } from "./landscape.ts";
 import { noise, seededRandom } from "./noise.ts";
 import { CHUNK_SIZE, chunkOrigin } from "./terrainChunks.ts";
 import {
-  GREAT_ARCH, FALLEN_GIANT, GREAT_FALLS, LAND_KINGDOMS, MUD_POOLS, OASIS, PADS, RAINFOREST_GIANTS, SKY_PALACE, VOLCANO, kingdomWeights,
+  CAMP_RADIUS, GREAT_ARCH, FALLEN_GIANT, GREAT_FALLS, LAND_KINGDOMS, MUD_POOLS, OASIS, PADS, RAINFOREST_GIANTS, SCAVENGER_CAMPS, SKY_PALACE, VOLCANO,
+  kingdomWeights,
 } from "./world.ts";
 import type { LandKingdomId } from "./world.ts";
 import { inlandWater } from "./worldSites.ts";
@@ -56,6 +57,7 @@ export const LANDMARK_FOOTPRINTS: readonly { x: number; z: number; r: number }[]
   { x: GREAT_ARCH.x, z: GREAT_ARCH.z, r: GREAT_ARCH.span / 2 + 12 },
   { x: FALLEN_GIANT.x, z: FALLEN_GIANT.z, r: 34 },
   ...RAINFOREST_GIANTS.map(giant => ({ x: giant.x, z: giant.z, r: 16 })),
+  ...SCAVENGER_CAMPS.map(camp => ({ x: camp.x, z: camp.z, r: CAMP_RADIUS })),
 ];
 
 function pickKingdom(weights: Float64Array, roll: number): LandKingdomId {

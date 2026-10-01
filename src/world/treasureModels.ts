@@ -1,40 +1,7 @@
 import * as THREE from "three";
-import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import type { TreasureKind } from "../game/loot";
-
-type Vec3 = [number, number, number];
-interface Placement { p?: Vec3; r?: Vec3; s?: Vec3 }
-
-const _matrix = new THREE.Matrix4();
-const _quaternion = new THREE.Quaternion();
-const _euler = new THREE.Euler();
-const _color = new THREE.Color();
-
-/** One colored, transformed, non-indexed piece of a merged treasure model. */
-function piece(geometry: THREE.BufferGeometry, color: string | ((x: number, y: number, z: number) => string), place: Placement = {}) {
-  const flat = geometry.index ? geometry.toNonIndexed() : geometry;
-  if (flat !== geometry) geometry.dispose();
-  _quaternion.setFromEuler(_euler.set(...(place.r ?? [0, 0, 0])));
-  _matrix.compose(new THREE.Vector3(...(place.p ?? [0, 0, 0])), _quaternion, new THREE.Vector3(...(place.s ?? [1, 1, 1])));
-  flat.applyMatrix4(_matrix);
-  const positions = flat.attributes.position;
-  const colors = new Float32Array(positions.count * 3);
-  for (let i = 0; i < positions.count; i++) {
-    _color.set(typeof color === "string" ? color : color(positions.getX(i), positions.getY(i), positions.getZ(i)));
-    colors[i * 3] = _color.r; colors[i * 3 + 1] = _color.g; colors[i * 3 + 2] = _color.b;
-  }
-  flat.setAttribute("color", new THREE.BufferAttribute(colors, 3));
-  return flat;
-}
-
-function merge(pieces: THREE.BufferGeometry[]) {
-  const merged = mergeGeometries(pieces);
-  pieces.forEach(item => item.dispose());
-  if (!merged) throw new Error("Treasure pieces must share attributes");
-  merged.computeBoundingSphere();
-  merged.computeBoundingBox();
-  return merged;
-}
+import { mergePieces as merge, piece } from "./pieces.ts";
+import type { Vec3 } from "./pieces.ts";
 
 const GOLD = "#f4c34a", GOLD_DARK = "#d39a2a", SILVER = "#dfe7ef", WOOD = "#6b4423", WOOD_LIGHT = "#86592f", IRON = "#5f6266";
 
@@ -229,8 +196,22 @@ function shield() {
   ]);
 }
 
+/** A scavenger's burlap sack, tied off and stuffed with your gold. */
+function sack() {
+  const burlap = (x: number, y: number, z: number) => (Math.floor(y * 18 + Math.sin(x * 24 + z * 31) * 0.6) % 2 ? "#9c7d55" : "#8a6c48");
+  const coin = (p: Vec3, r: Vec3, color = GOLD) => piece(new THREE.CylinderGeometry(0.11, 0.11, 0.035, 12), color, { p, r });
+  return merge([
+    piece(new THREE.SphereGeometry(0.3, 14, 11), burlap, { p: [0, 0.27, 0], s: [1, 0.92, 0.9] }),
+    piece(new THREE.CylinderGeometry(0.1, 0.16, 0.16, 12), "#8a6c48", { p: [0, 0.58, 0] }),
+    piece(new THREE.TorusGeometry(0.105, 0.025, 6, 14), "#5a3f22", { p: [0, 0.6, 0], r: [Math.PI / 2, 0, 0] }),
+    piece(new THREE.SphereGeometry(0.12, 10, 8), GOLD, { p: [0, 0.69, 0], s: [1, 0.55, 1] }),
+    coin([0.32, 0.02, 0.12], [0.1, 0, 0.2]), coin([-0.28, 0.02, 0.2], [-0.2, 0, 0.1], GOLD_DARK), coin([0.12, 0.02, -0.33], [0.3, 0, -0.1]),
+    coin([0.22, 0.05, 0.24], [0.9, 0.4, 0.3], GOLD_DARK),
+  ]);
+}
+
 const BUILDERS: Record<TreasureKind, () => THREE.BufferGeometry> = {
-  coins, goblet, crown, gem, chest, scroll, orb, idol, pearl, fruit, spool, kettle, boot, trinket, hourglass, harp, shield,
+  coins, goblet, crown, gem, chest, scroll, orb, idol, pearl, fruit, spool, kettle, boot, trinket, hourglass, harp, shield, sack,
 };
 
 let cache: Map<TreasureKind, THREE.BufferGeometry> | undefined;

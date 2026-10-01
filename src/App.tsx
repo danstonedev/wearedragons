@@ -559,7 +559,7 @@ function GameWorld({
 
 export default function App() {
   const { progress: guardianProgress, saveVictory, saveUnavailable } = useGuardianProgress();
-  const { hoard, bank: bankHoard, saveUnavailable: hoardSaveUnavailable } = useHoard();
+  const { hoard, bank: bankHoard, steal: stealFromHoard, saveUnavailable: hoardSaveUnavailable } = useHoard();
   const { progress: raidProgress, record: recordRaid, saveUnavailable: raidSaveUnavailable } = useScavengerProgress();
   const [currentLair, setCurrentLair] = useState<LairDef>(LAIRS[0]);
   const [screen, setScreen] = useState<AppScreen>("dragon_select");
@@ -629,6 +629,7 @@ export default function App() {
         onBack={() => setScreen("mode_select")}
         hoard={hoard}
         onBank={bankHoard}
+        onSteal={stealFromHoard}
         hoardSaveUnavailable={hoardSaveUnavailable}
       />
     );

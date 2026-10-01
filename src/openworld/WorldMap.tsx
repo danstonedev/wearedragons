@@ -7,7 +7,8 @@ import type { KingdomId } from "../game/world";
 import { beaconBase } from "../game/worldSites";
 import { RARITY_COLORS } from "../world/treasureModels";
 import { windwaySamples } from "../game/windways";
-import { WORLD_BOUNDS } from "../game/world";
+import { SCAVENGER_CAMPS, WORLD_BOUNDS } from "../game/world";
+import { scavengerMap } from "../game/scavengerRuntime";
 import { mapPercent, sharedMapPainter } from "./worldMapImage";
 
 /** Where each kingdom's name is lettered on the map. */
@@ -78,6 +79,11 @@ export default function WorldMap({ discovered, onClose }: { discovered: Readonly
           {lootMap.items.filter(item => discovered.has(item.kingdom)).map((item, i) => (
             <div key={i} className="ow-map-treasure-dot" style={{ ...mapPercent(item.x, item.z), color: RARITY_COLORS[item.rarity], background: RARITY_COLORS[item.rarity], width: item.unique ? 7 : 4, height: item.unique ? 7 : 4 }} />
           ))}
+          {/* Scavenger warrens, and anyone out of them: raiders red, thieves hauling loot orange. */}
+          {SCAVENGER_CAMPS.map(camp => <div key={camp.id} className="ow-map-camp" title={camp.name} style={mapPercent(camp.x, camp.z)}>⛺</div>)}
+          {scavengerMap.agents.filter(agent => agent.kind === "raider" || agent.kind === "hauler").map((agent, i) => (
+            <div key={i} className={`ow-map-scavenger ${agent.kind}`} style={mapPercent(agent.x, agent.z)} />
+          ))}
           <div className="ow-map-hoard-dot" style={mapPercent(HOARD_SITE.x, HOARD_SITE.z)}>◆</div>
           <div className="ow-map-player-arrow" style={{ ...mapPercent(player.x, player.z), transform: `translate(-50%, -50%) rotate(${-player.heading}rad)` }}>▲</div>
           <span className="ow-map-compass" style={{ top: 5, left: "50%", transform: "translateX(-50%)" }}>N</span>
@@ -89,6 +95,7 @@ export default function WorldMap({ discovered, onClose }: { discovered: Readonly
           <div className="ow-map-legend-item"><span style={{ color: "#ffd700" }}>✦</span> Lit beacon · ○ unlit (follow the light pillars)</div>
           <div className="ow-map-legend-item"><span style={{ color: "#ffd27a" }}>◆</span> Your hoard · lit beacons reveal treasure</div>
           <div className="ow-map-legend-item"><span style={{ color: "#bfefff" }}>⤳</span> Windways carry you fast</div>
+          <div className="ow-map-legend-item"><span style={{ color: "#e8c89a" }}>⛺</span> Scavenger warrens · <span style={{ color: "#ff4a3a" }}>●</span> raiders</div>
           <div className="ow-map-legend-item right">{discovered.size} / {KINGDOMS.length} beacons</div>
         </div>
       </div>

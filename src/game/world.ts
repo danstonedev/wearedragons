@@ -52,7 +52,7 @@ export const HOME_LAKE = { x: 62, z: -82, radius: 27.5, surface: -1.55 } as cons
 export const VOLCANO = { x: 60, z: -770, radius: 260, height: 185, crater: 40, lava: 100 } as const;
 export const SKY_PALACE = { x: -150, z: -580, top: 92, radius: 46 } as const;
 export const FROZEN_LAKE = { x: -520, z: -650, radius: 62, shore: 96, level: 15 } as const;
-export const GREAT_FALLS = { x: 560, z: -720, radius: 112, cliff: 136, top: 58, lip: { x: 560, z: -605 }, pool: { x: 560, z: -572, radius: 26 } } as const;
+export const GREAT_FALLS = { x: 560, z: -720, radius: 112, cliff: 136, top: 58, lip: { x: 560, z: -605 }, pool: { x: 560, z: -572, radius: 26, level: 4.6 } } as const;
 export const OASIS = { x: 640, z: -150, radius: 34, shore: 48, level: 0.4 } as const;
 export const MUD_POOLS: readonly { x: number; z: number; r: number }[] = [
   { x: -520, z: -230, r: 22 }, { x: -610, z: -330, r: 26 }, { x: -700, z: -190, r: 18 }, { x: -470, z: -380, r: 20 },
@@ -72,6 +72,24 @@ export const SEA_STACKS: readonly { x: number; z: number; r: number; top: number
   { x: -300, z: 188, r: 9, top: 40 }, { x: 380, z: 205, r: 6, top: 27 }, { x: -520, z: 200, r: 8, top: 36 },
   { x: 560, z: 196, r: 10, top: 44 }, { x: 15, z: 260, r: 5, top: 22 },
 ];
+
+/**
+ * Scavenger burrows in the wild land between the kingdoms. `facing` turns the camp: the burrow
+ * mouth opens toward the campfire and tents. Raiding camps have a dry walk to your hoard.
+ */
+export interface CampSite { id: string; name: string; x: number; z: number; facing: number; crew: number; ballista: boolean; raids: boolean }
+export const SCAVENGER_CAMPS: readonly CampSite[] = [
+  { id: "rootcellar", name: "Rootcellar Warren", x: 20, z: -380, facing: 4.71, crew: 4, ballista: true, raids: true },
+  { id: "tinkers", name: "Tinker's Hollow", x: 360, z: -100, facing: 5.5, crew: 3, ballista: false, raids: true },
+  { id: "saltburrow", name: "Saltburrow", x: -460, z: -20, facing: 4.71, crew: 4, ballista: true, raids: true },
+  { id: "ashpit", name: "Ashpit Hollow", x: 240, z: -340, facing: 3.93, crew: 3, ballista: false, raids: false },
+  { id: "reedwarren", name: "Reedwarren", x: -360, z: -340, facing: 3.14, crew: 3, ballista: false, raids: false },
+  { id: "dunehole", name: "Dunehole", x: 620, z: -360, facing: 5.89, crew: 3, ballista: true, raids: false },
+  { id: "mossden", name: "Mossden", x: 340, z: -720, facing: 0, crew: 3, ballista: false, raids: false },
+  { id: "frostburrow", name: "Frostburrow", x: -310, z: -530, facing: 0, crew: 3, ballista: true, raids: false },
+];
+/** Trees and rocks keep out of this radius around a camp. */
+export const CAMP_RADIUS = 26;
 
 /** Flattened sites for beacons, palaces, villages, and camps. Heights default to the land there. */
 export interface Pad { x: number; z: number; r: number; blend: number; height?: number }

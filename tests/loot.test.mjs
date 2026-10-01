@@ -5,7 +5,10 @@ import {
   TREASURES, TREASURE_KINDS, createCommonLoot, resolveTreasureSpot, skyDrift, regionOf, appraise, TRIBE_TASTES,
   emptyTalons, grabWith, releaseFrom, carriedIds, talonsNeeded, carryLoad, stepLooseLoot, inLake, inSea,
   HOARD_SITE, LAKE, hoardFloor, inHoardZone, dunkBonus, emptyHoard, bankLoot, parseHoard, hoardRank, hoardMoundHeight,
+  KINGDOM_TREASURES, ALL_TREASURES, createWildLoot, inLava, inlandSplash, restingSurface,
 } from "../src/game/loot.ts";
+import { KINGDOMS, FROZEN_LAKE, OASIS, VOLCANO, MUD_POOLS, SCAVENGER_CAMPS, kingdomAt } from "../src/game/world.ts";
+import { inlandWater } from "../src/game/worldSites.ts";
 import { terrainHeight, createPlantings } from "../src/game/landscape.ts";
 import { DRAGON_TYPES } from "../src/dragons.ts";
 
@@ -201,4 +204,53 @@ test("hoard ranks and the gold mound grow with the hoard", () => {
   assert.ok(hoardMoundHeight(0) < hoardMoundHeight(500));
   assert.ok(hoardMoundHeight(500) < hoardMoundHeight(5000));
   assert.ok(hoardMoundHeight(1e9) <= 2.05 + 1e-9);
+});
+
+test("every kingdom beyond the valley hides three treasures of its own, perched on its landmarks", () => {
+  assert.equal(new Set(ALL_TREASURES.map(def => def.id)).size, ALL_TREASURES.length);
+  for (const kingdom of KINGDOMS.filter(item => item.id !== "pyrrhia")) {
+    const local = KINGDOM_TREASURES.filter(def => def.kingdom === kingdom.id);
+    assert.equal(local.length, 3, kingdom.id);
+  }
+  assert.ok(KINGDOM_TREASURES.filter(def => def.weight >= 3).length >= 3, "a few two-talon chests out there");
+  for (const def of KINGDOM_TREASURES) {
+    const spot = resolveTreasureSpot(def);
+    assert.ok([spot.x, spot.y, spot.z].every(Number.isFinite), def.id);
+    assert.equal(kingdomAt(spot.x, spot.z).id, def.kingdom, `${def.id} lies in its kingdom`);
+    assert.ok(def.unique && TREASURE_KINDS.includes(def.kind), def.id);
+    assert.ok(!inSea(spot) && !inLava(spot) && !inlandSplash(spot), `${def.id} is high and dry`);
+    if (def.perch === "ground") {
+      assert.equal(inlandWater(spot.x, spot.z), null, def.id);
+      assert.ok(spot.y > SEA_LEVEL, def.id);
+    }
+    if (def.perch === "ledge") assert.ok(spot.y > terrainHeight(spot.x, spot.z, "open") + 20, `${def.id} sits high on its landmark`);
+  }
+});
+
+test("wild loot is scattered over every kingdom, never in water, camps, or the home valley's own patch", () => {
+  const wild = createWildLoot();
+  assert.deepEqual(wild.map(def => def.id), createWildLoot().map(def => def.id), "the same every flight");
+  assert.ok(wild.length >= 50, `${wild.length}`);
+  const kingdoms = new Set(wild.map(def => kingdomAt(def.at[0], def.at[1]).id));
+  for (const id of ["sky", "ice", "mud", "rainforest", "sand", "pantala", "glaeryus"]) assert.ok(kingdoms.has(id), id);
+  for (const def of wild) {
+    const [x, z] = def.at;
+    assert.ok(!def.unique && def.perch === "ground", def.id);
+    assert.ok(!(Math.abs(x) < 215 && z > -215 && z < 170), `${def.id} leaves the valley to the valley's own loot`);
+    const y = terrainHeight(x, z, "open");
+    assert.equal(inlandWater(x, z), null, def.id);
+    assert.ok(!inSea({ x, y, z }) && !inlandSplash({ x, y, z }), def.id);
+    assert.ok(SCAVENGER_CAMPS.every(camp => Math.hypot(x - camp.x, z - camp.z) > 26), `${def.id} is not already in a stash`);
+  }
+});
+
+test("dropped treasure sinks in lava, mud, and the oasis, and rests on the frozen lake's ice", () => {
+  assert.ok(inLava({ x: VOLCANO.x, y: VOLCANO.lava - 1, z: VOLCANO.z }));
+  assert.ok(!inLava({ x: VOLCANO.x, y: VOLCANO.lava + 20, z: VOLCANO.z }));
+  assert.equal(inlandSplash({ x: OASIS.x, y: OASIS.level - 0.5, z: OASIS.z }), "oasis");
+  assert.equal(inlandSplash({ x: MUD_POOLS[0].x, y: 0, z: MUD_POOLS[0].z }), "mud");
+  assert.equal(inlandSplash({ x: 0, y: 0, z: -300 }), null);
+  assert.equal(restingSurface(FROZEN_LAKE.x, FROZEN_LAKE.z), Math.max(terrainHeight(FROZEN_LAKE.x, FROZEN_LAKE.z, "open"), FROZEN_LAKE.level));
+  assert.ok(restingSurface(FROZEN_LAKE.x, FROZEN_LAKE.z) >= FROZEN_LAKE.level);
+  assert.equal(restingSurface(0, -300), terrainHeight(0, -300, "open"));
 });

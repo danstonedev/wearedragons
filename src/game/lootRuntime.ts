@@ -16,8 +16,16 @@ export const lootHud = {
   nearest: null as null | { name: string; distance: number; bearing: number; rarity: TreasureRarity },
 };
 
-/** Treasure still glinting in the world, for the map. */
-export const lootMap = { items: [] as { x: number; z: number; rarity: TreasureRarity; unique: boolean; region: LootRegion; kingdom: KingdomId }[] };
+/** Treasure still glinting in the world, for the map and the scavengers who covet it. */
+export interface LooseLootEntry {
+  id: string; name: string; x: number; y: number; z: number;
+  /** On open ground, where someone on foot could pick it up. */
+  grounded: boolean;
+  rarity: TreasureRarity; unique: boolean; region: LootRegion; kingdom: KingdomId;
+  /** A sack of your own stolen gold. */
+  sack: boolean;
+}
+export const lootMap = { items: [] as LooseLootEntry[] };
 
 export function lootToast(text: string, tone: "gold" | "info" | "warn" | "legend" = "info") {
   missionEmitter.dispatchEvent(new CustomEvent("loot_toast", { detail: { text, tone } }));

@@ -6,6 +6,7 @@ import { GreatFalls, MudPools, Oasis } from "./Waters";
 import { FallenGiant, GreatArch, RainforestGiants, SeaStacks } from "./Wonders";
 import { landmarkTime } from "./shaders";
 import RoyalHoards from "./RoyalHoards";
+import ScavengerCamps from "./ScavengerCamps";
 
 /** Every kingdom's landmarks; must sit inside <Physics> for their colliders. */
 export default function Landmarks() {
@@ -30,5 +31,6 @@ export default function Landmarks() {
     <Citadel />
     <SeaStacks />
     <RoyalHoards />
+    <ScavengerCamps />
   </>;
 }

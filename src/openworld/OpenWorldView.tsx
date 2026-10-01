@@ -28,6 +28,7 @@ import MissionTimer from "../world/MissionTimer";
 import PlayerDragon from "../world/PlayerDragon";
 import Projectiles, { EnemyProjectiles } from "../world/Projectiles";
 import RivalDragons from "../world/RivalDragons";
+import Scavengers from "../world/Scavengers";
 import Vegetation from "../world/Vegetation";
 import WorldDetails from "../world/WorldDetails";
 import WorldTerrain from "../world/WorldTerrain";
@@ -87,12 +88,14 @@ function useMapPreload() {
 }
 
 /** Full open-world free flight across the dragon kingdoms. */
-export default function OpenWorldView({ dragon, onSwap, onBack, hoard, onBank, hoardSaveUnavailable }: {
+export default function OpenWorldView({ dragon, onSwap, onBack, hoard, onBank, onSteal, hoardSaveUnavailable }: {
   dragon: DragonType;
   onSwap: (d: DragonType) => void;
   onBack: () => void;
   hoard: HoardProgress;
   onBank: (def: TreasureDef, dragonId: string, value: number) => void;
+  /** Scavengers scoop gold out of your hoard; returns how much they got. */
+  onSteal: (campId: string, amount: number) => number;
   hoardSaveUnavailable: boolean;
 }) {
   const [kingdom, setKingdom] = useState<Kingdom>(KINGDOMS[0]);
@@ -165,6 +168,7 @@ export default function OpenWorldView({ dragon, onSwap, onBack, hoard, onBank, h
             <Projectiles />
             <EnemyProjectiles />
             <RivalDragons dragon={dragon} />
+            <Scavengers gold={hoard.gold} onSteal={onSteal} knockedOut={knockedOut} />
             <CombatFeedback />
           </Physics>
           <KingdomTracker onChange={handleKingdom} />
