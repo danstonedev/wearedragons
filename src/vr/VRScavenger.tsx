@@ -78,6 +78,8 @@ export function VRScavengerRig({ raid }: { raid: RaidState }) {
     raidEmitter.addEventListener("cue", cue);
     return () => {
       resetRaidInput();
+      // A crouch in the headset should not leave the desktop raid stuck sneaking.
+      raidTouch.sneak = false;
       session.removeEventListener("visibilitychange", visibility);
       raidEmitter.removeEventListener("cue", cue);
     };
